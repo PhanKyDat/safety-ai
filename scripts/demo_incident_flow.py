@@ -120,6 +120,9 @@ def main() -> int:
                    help="Gui tiep vao nhom Telegram chung (ma bot trong .env). Tin ghi ro GIA LAP")
     p.add_argument("--telegram-max", type=int, default=2,
                    help="Gui toi da bao nhieu tin Telegram moi lan chay thu, de khong lam ngap nhom")
+    p.add_argument("--db", default=None, metavar="PATH",
+                   help="Ghi su co vao bang incidents o PATH, vd data/incidents_demo.db. Nen dung tep rieng "
+                        "de su co gia lap khong lan vao thong ke that")
     p.add_argument("--verify-wait", type=float, default=30.0,
                    help="Cho Frigate dong su co (duration 20s) va ghi xong doan video roi moi kiem")
     args = p.parse_args()
@@ -141,7 +144,7 @@ def main() -> int:
         return 1
 
     outputs = build_outputs(args.frigate, args.camera, telegram=args.telegram,
-                            telegram_when=at_most(args.telegram_max))
+                            telegram_when=at_most(args.telegram_max), db_path=args.db)
     marked = MarkSimulated(outputs, active=fake_ppe or fake_fire)
     processor = IncidentProcessor(args.camera, publisher=marked, snapshot_dir=args.snapshots)
 

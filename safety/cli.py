@@ -3,10 +3,11 @@
 Mỗi khung đi qua nhận diện + tracking, rồi qua luật đồ bảo hộ và luật cháy/khói.
 Sự cố được chụp ảnh vào thư mục snapshots/. Có --frigate thì đẩy sang Frigate để
 xem lại kèm đoạn ghi hình; có --telegram thì gửi tiếp vào nhóm Telegram chung
-(mã bot và chat id lấy từ .env):
+(mã bot và chat id lấy từ .env); có --db thì ghi vào bảng incidents cho trang
+thống kê đọc:
 
     python -m safety.cli --source rtsp://127.0.0.1:8554/xuong_han_sub \\
-        --camera xuong_han --frigate http://127.0.0.1:5000/api --telegram
+        --camera xuong_han --frigate http://127.0.0.1:5000/api --telegram --db
 """
 
 from __future__ import annotations
@@ -14,9 +15,11 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import os
 import time
 
 from safety.contracts import FrameResult
+from safety.db import DEFAULT_DB
 from safety.incidents import IncidentProcessor
 from safety.outputs import build_outputs
 from safety.pipeline import SafetyPipeline
@@ -47,7 +50,22 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--snapshots", default="snapshots", help="Thư mục lưu ảnh sự cố")
     p.add_argument("--telegram", action="store_true",
                    help="Gửi sự cố vào nhóm Telegram chung (TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID trong .env)")
+    p.add_argument("--db", nargs="?", const="", default=None, metavar="PATH",
+                   help=f"Ghi sự cố vào bảng incidents. Bỏ trống PATH = INCIDENT_DB trong .env, "
+                        f"không có thì {DEFAULT_DB} (cùng tệp cầu nối MQTT ghi)")
     return p
+
+
+def db_path(arg: str | None) -> str | None:
+    """--db không kèm đường dẫn thì dùng chung tệp với cầu nối MQTT và trang thống kê."""
+    if arg is None:
+        return None
+    if arg:
+        return arg
+    from dotenv import load_dotenv
+
+    load_dotenv()
+    return os.environ.get("INCIDENT_DB", "").strip() or DEFAULT_DB
 
 
 def draw(frame, result):
@@ -75,7 +93,8 @@ def main(argv: list[str] | None = None) -> int:
         conf=args.conf,
     )
     source = FrameSource(parse_source(args.source), target_fps=args.fps)
-    outputs = build_outputs(args.frigate, args.camera, telegram=args.telegram)
+    outputs = build_outputs(args.frigate, args.camera, telegram=args.telegram,
+                            db_path=db_path(args.db))
     processor = IncidentProcessor(args.camera, publisher=outputs, snapshot_dir=args.snapshots)
 
     seen_tracks: set[int] = set()

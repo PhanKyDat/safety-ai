@@ -103,6 +103,13 @@ Sự cố tới Frigate trước rồi mới sang Telegram, để tin nhắn kè
 Frigate sập thì Telegram vẫn báo, chỉ là không có đường dẫn. Hai bên gửi ở hai luồng
 riêng nên Telegram chậm không làm sự cố tới Frigate muộn.
 
+Thêm `--db` để ghi sự cố vào bảng `incidents` ([schemas/incidents.sql](schemas/incidents.sql)),
+cùng tệp với cảnh báo vùng nguy hiểm mà cầu nối MQTT ghi (`INCIDENT_DB` trong `.env`, mặc định
+`data/incidents.db`), để trang thống kê đọc một chỗ là đủ. Dòng được ghi sau khi Frigate trả
+mã sự cố, nên có sẵn `frigate_event_id` để làm nút mở sự cố. DB không bị lọc như Telegram:
+thống kê cần đủ mọi sự cố. Chạy thử bằng nhãn giả lập thì ghi ra tệp riêng
+(`--db data/incidents_demo.db`) để sự cố giả không lẫn vào thống kê thật.
+
 Chưa có model PPE/cháy thì chạy thử cả đường đi bằng nhãn giả lập. Sự cố giả lập ghi rõ
 "GIẢ LẬP" trong mô tả; với `--telegram` mỗi lần chạy chỉ gửi tối đa 2 tin để không làm ngập nhóm:
 
