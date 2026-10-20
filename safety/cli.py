@@ -102,11 +102,13 @@ def main(argv: list[str] | None = None) -> int:
     incidents = 0
     started = 0.0
     infer_ms: list[float] = []
+    frame_at: list[float] = []
 
     try:
         for ts, frame in source:
             if not frames:
                 started = time.time()
+            frame_at.append(time.time())
             t0 = time.perf_counter()
             result = pipeline.process(ts, frame)
             infer_ms.append(1000 * (time.perf_counter() - t0))
@@ -139,10 +141,10 @@ def main(argv: list[str] | None = None) -> int:
 
     elapsed = time.time() - started if frames else 0.0
     print(
-        f"Đã xử lý {frames} khung trong {elapsed:.1f}s "
-        f"({frames / elapsed if elapsed else 0:.1f} FPS, không tính lúc nạp model), "
+        f"Đã xử lý {frames} khung trong {elapsed:.1f}s, "
         f"{len(seen_tracks)} track_id khác nhau: {sorted(seen_tracks)}"
     )
+    print(_rate(frame_at))
     print(_speed(infer_ms))
     print(f"{incidents} sự cố; {outputs.summary()}")
     return 0
@@ -152,6 +154,22 @@ def main(argv: list[str] | None = None) -> int:
 # Tính chung vào trung bình thì một lần chạy 40 khung ra ~75 ms thay vì ~20 ms:
 # chính lỗi này từng làm nhóm tin con số 71 ms/khung ở tuần 2.
 WARMUP_FRAMES = 5
+
+
+def _rate(frame_at: list[float]) -> str:
+    """Nhịp xử lý ổn định, bỏ các khung khởi động GPU.
+
+    Chia tổng số khung cho tổng thời gian thì khung đầu (~3 giây) kéo con số xuống:
+    cùng một hệ thống, chạy 40 khung báo 3,6 FPS, chạy 150 khung báo 4,5 FPS, trong
+    khi nhịp thật là 4,8. Đó là nguồn gốc con số "chỉ đạt 3,4–4,3 FPS khi chạy cùng
+    Frigate" ở tuần 2–5.
+    """
+    steady = frame_at[WARMUP_FRAMES:]
+    if len(steady) < 2:
+        return f"Nhịp xử lý: mới có {len(frame_at)} khung, chưa đủ để đo nhịp ổn định"
+    span = steady[-1] - steady[0]
+    return (f"Nhịp xử lý: {(len(steady) - 1) / span:.2f} khung/giây "
+            f"(bỏ {WARMUP_FRAMES} khung đầu, đo trên {span:.1f}s)")
 
 
 def _speed(infer_ms: list[float]) -> str:

@@ -32,6 +32,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 from demo_fire_rule import FIRE_AT, box_of
 from demo_ppe_rule import fake_no_helmet
 
+from safety.cli import _rate
 from safety.contracts import Detection, DetectClass, FrameResult, Incident
 from safety.frigate import FrigateClient
 from safety.incidents import IncidentProcessor
@@ -150,8 +151,10 @@ def main() -> int:
 
     found: list[Incident] = []
     frames, slowest_handle = 0, 0.0
+    frame_at: list[float] = []
     deadline = time.time() + args.seconds
     for ts, frame in FrameSource(args.source, target_fps=args.fps):
+        frame_at.append(time.time())
         result = inject(pipeline.process(ts, frame), fake_ppe, fake_fire)
         t0 = time.perf_counter()
         for inc in processor.handle(frame, result):
@@ -165,8 +168,10 @@ def main() -> int:
 
     loop_seconds = time.time() - (deadline - args.seconds)
     outputs.close()
-    print(f"\n{frames} khung trong {loop_seconds:.1f}s ({frames / loop_seconds:.1f} khung/giay), "
+    # Chia frames cho loop_seconds thì gộp cả lúc nối RTSP và khởi động GPU, ra thấp hơn nhịp thật.
+    print(f"\n{frames} khung trong {loop_seconds:.1f}s (tinh ca luc noi luong va khoi dong GPU), "
           f"{len(found)} su co")
+    print(_rate(frame_at))
     print(outputs.summary())
     print(f"buoc luat+chup anh+dua vao hang doi cham nhat: {1000 * slowest_handle:.1f} ms/khung")
 
