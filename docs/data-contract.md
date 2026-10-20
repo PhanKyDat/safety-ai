@@ -120,6 +120,18 @@ POST http://frigate:5000/api/events/{camera}/{label}/create
 Dùng `incident.frigate_path` và `incident.to_frigate_payload()` để khỏi gõ tay.
 Frigate trả về `event_id` → gán vào `incident.frigate_event_id` rồi mới ghi DB.
 
+Sự cố cháy/khói kèm thêm `draw` để Frigate khoanh đám lửa trên ảnh của nó
+(trường `incident.boxes`, toạ độ tỉ lệ `[x, y, rộng, cao]`, màu theo thứ tự BGR):
+
+```
+"draw": {"boxes": [{"box": [0.47, 0.56, 0.09, 0.17], "color": [0, 0, 255], "score": 80}]}
+```
+
+Sự cố đồ bảo hộ **không** kèm hộp: Frigate không nhận ảnh của module mà tự chụp khung đang có
+lúc nhận sự cố, khung đó đi trước khung module đang xử lý khoảng 0,3 giây (độ trễ restream,
+đo 20/10) cộng thời gian xử lý, nên hộp quanh người đang đi bị lệch khỏi người. Ảnh có khoanh
+đúng người là `incident.snapshot` của module (gửi Telegram, ghi DB). `boxes` không ghi DB.
+
 Cổng 5000 chỉ dùng trong mạng Docker nội bộ, không mở ra ngoài.
 
 ### 3b. Ghi DB

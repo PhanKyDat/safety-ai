@@ -205,6 +205,10 @@ class Incident:
     snapshot: str | None = None
     track_id: int | None = None
     frigate_event_id: str | None = None
+    # Hộp để Frigate khoanh trên ảnh sự cố của nó, toạ độ tỉ lệ [x, y, rộng, cao] trong
+    # khoảng 0–1, đúng kiểu `draw.boxes` của Frigate. Hiện chỉ có ở sự cố cháy/khói (xem
+    # IncidentProcessor.handle). Không ghi DB: ảnh `snapshot` của module đã vẽ sẵn hộp.
+    boxes: tuple[tuple[float, float, float, float], ...] = ()
 
     def to_dict(self) -> dict:
         """Khớp đúng tên cột bảng incidents trong schemas/incidents.sql."""
@@ -241,9 +245,16 @@ class Incident:
         return f"/events/{self.camera}/{self.label.value}/create"
 
     def to_frigate_payload(self, duration: int = 20) -> dict:
-        return {
+        payload = {
             "sub_label": self.sub_label,
             "score": self.score,
             "duration": duration,
             "include_recording": True,
         }
+        if self.boxes:
+            # Frigate vẽ bằng OpenCV nên màu theo thứ tự BGR: [0, 0, 255] là đỏ (đã thử trên 0.17.2).
+            payload["draw"] = {"boxes": [
+                {"box": [round(v, 4) for v in box], "color": [0, 0, 255], "score": round(100 * self.score)}
+                for box in self.boxes
+            ]}
+        return payload

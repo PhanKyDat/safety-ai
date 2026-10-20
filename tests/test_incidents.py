@@ -4,6 +4,7 @@
 """
 
 import numpy as np
+import pytest
 
 from safety.contracts import BBox, Detection, DetectClass, FrameResult, Incident, IncidentLabel, Severity
 from safety.incidents import IncidentProcessor, snapshot_name
@@ -90,3 +91,37 @@ def test_luu_anh_loi_van_gui_su_co(tmp_path):
 def test_khong_co_frigate_van_chay(tmp_path):
     proc = IncidentProcessor("xuong_han", publisher=None, snapshot_dir=tmp_path)
     assert len(run(proc, no_helmet_frames())) == 1
+
+
+def test_su_co_ppe_khong_gui_hop_cho_frigate():
+    """Frigate tự chụp khung đi trước module ~0,3 s: người đang đi đã dịch chỗ, hộp sẽ lệch."""
+    inc = run(IncidentProcessor("xuong_han", snapshot_dir=None), no_helmet_frames())[0]
+    assert inc.boxes == ()
+    assert "draw" not in inc.to_frigate_payload()
+
+
+def test_hop_chay_doi_sang_ti_le_dung_kieu_frigate():
+    frames = [frame(1789012340 + t / 5, Detection(DetectClass.FIRE, FLAME, 0.8)) for t in range(6)]
+    inc = run(IncidentProcessor("xuong_han", snapshot_dir=None), frames)[0]
+    assert inc.boxes[0] == pytest.approx((300 / 640, 200 / 360, 60 / 640, 60 / 360))
+    assert inc.to_frigate_payload()["draw"]["boxes"] == [
+        {"box": [0.4688, 0.5556, 0.0938, 0.1667], "color": [0, 0, 255], "score": 80}]
+
+
+def test_su_co_chay_khoanh_moi_dam_lua_tru_vung_loai_tru():
+    from safety.rules import ExcludeZone, FireConfig
+
+    flame2 = BBox(500, 20, 540, 60)                       # nằm trong vùng loại trừ góc phải trên
+    cfg = FireConfig(exclude=(ExcludeZone(0.75, 0.0, 1.0, 0.3, "den bao"),))
+    frames = [frame(1789012340 + t / 5, Detection(DetectClass.FIRE, FLAME, 0.8),
+                    Detection(DetectClass.FIRE, flame2, 0.9)) for t in range(6)]
+    inc = run(IncidentProcessor("xuong_han", snapshot_dir=None, fire=cfg), frames)[0]
+    assert len(inc.boxes) == 1
+    assert inc.boxes[0][0] == 300 / 640
+
+
+def test_khong_co_hop_thi_frigate_khong_nhan_draw():
+    inc = Incident(camera="xuong_han", label=IncidentLabel.FIRE, severity=Severity.CRITICAL,
+                   score=0.8, ts=1789012340.0)
+    assert "draw" not in inc.to_frigate_payload()
+    assert "boxes" not in inc.to_dict()                    # không đổi cột DB của Uy
