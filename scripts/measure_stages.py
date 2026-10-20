@@ -66,9 +66,9 @@ def docker_cpu() -> str:
 
 def main() -> int:
     p = argparse.ArgumentParser()
-    p.add_argument("--source", default="rtsp://127.0.0.1:8554/xuong_han_sub")
+    p.add_argument("--source", default="rtsp://127.0.0.1:8554/xuong_han")
     p.add_argument("--camera", default="xuong_han")
-    p.add_argument("--model", default="yolo26n.pt")
+    p.add_argument("--model", default="yolo26n-pose.pt")
     p.add_argument("--extra-model", action="append", default=[])
     p.add_argument("--no-model", action="store_true", help="Chỉ đọc luồng, không nhận diện")
     p.add_argument("--device", default="0")

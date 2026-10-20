@@ -186,8 +186,23 @@ Tên camera là khoá nối mọi thứ: config Frigate, đường dẫn restrea
 | Chỗ | Giá trị |
 |---|---|
 | Camera mẫu | `xuong_han` |
-| Restream module đọc | `rtsp://<frigate_host>:8554/xuong_han_sub` |
+| Restream module đọc | `rtsp://<frigate_host>:8554/xuong_han` (luồng chính, xem dưới) |
 | Vùng nguy hiểm mẫu | `vung_nguy_hiem` |
+
+**Module đọc luồng chính, không đọc luồng phụ (đổi 20/10).** Mô hình cháy/khói nhận mảng sàn
+xám bị nén mạnh là khói. Đo 150 khung mỗi nguồn, cùng một video không có lửa:
+
+| Nguồn | Khung có "khói" |
+|---|---|
+| Tệp gốc 1280×720 | 0% |
+| Tệp gốc thu về 640×360 | 0% |
+| Luồng chính restream (720p, 2 Mbps) | 4% |
+| Luồng phụ restream (360p, 500 kbps) | 22%, gần hết là hộp phủ trên 1/4 khung |
+
+Không phải do độ phân giải mà do mức nén; luồng phụ camera thật cũng chỉ 256 kbps–1 Mbps.
+Chạy 2 phút cùng Frigate (mô hình tư thế + mô hình cháy): luồng phụ 2 sự cố khói nhầm, luồng
+chính 0; nhịp 4,88 khung/giây, nhận diện trung vị 35 ms, CPU cả máy ~22%. Frigate vẫn dùng
+luồng phụ cho phần phát hiện của nó, không đổi gì bên Frigate.
 
 Đặt tên camera: `snake_case`, không dấu. Thêm camera mới thì khai trong
 `frigate/config.example.yml` trước, rồi báo cả nhóm.

@@ -58,7 +58,7 @@ Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
 
 ```powershell
 .venv\Scripts\python.exe -m safety.cli --source 0                      # webcam
-.venv\Scripts\python.exe -m safety.cli --source rtsp://127.0.0.1:8554/xuong_han_sub
+.venv\Scripts\python.exe -m safety.cli --source rtsp://127.0.0.1:8554/xuong_han
 .venv\Scripts\python.exe -m safety.cli --source video.mp4 --json       # file, in JSON
 ```
 
@@ -91,7 +91,7 @@ services:
 
 ```powershell
 docker compose up -d
-.venv\Scripts\python.exe -m safety.cli --source rtsp://127.0.0.1:8554/xuong_han_sub --camera xuong_han --frigate http://127.0.0.1:5000/api
+.venv\Scripts\python.exe -m safety.cli --source rtsp://127.0.0.1:8554/xuong_han --camera xuong_han --frigate http://127.0.0.1:5000/api
 ```
 
 `--camera` phải trùng tên camera trong Frigate, sai thì module báo lỗi ngay lúc khởi động.
@@ -141,7 +141,7 @@ docker compose up -d
 .\scripts\frigate-check.ps1
 ```
 
-Giao diện: <https://localhost:8971>. Module đọc `rtsp://127.0.0.1:8554/xuong_han_sub`.
+Giao diện: <https://localhost:8971>. Module đọc `rtsp://127.0.0.1:8554/xuong_han`.
 
 ## Cảnh báo Telegram
 

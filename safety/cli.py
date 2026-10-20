@@ -6,7 +6,7 @@ xem lại kèm đoạn ghi hình; có --telegram thì gửi tiếp vào nhóm Te
 (mã bot và chat id lấy từ .env); có --db thì ghi vào bảng incidents cho trang
 thống kê đọc:
 
-    python -m safety.cli --source rtsp://127.0.0.1:8554/xuong_han_sub \\
+    python -m safety.cli --source rtsp://127.0.0.1:8554/xuong_han \\
         --camera xuong_han --frigate http://127.0.0.1:5000/api --telegram --db
 """
 
@@ -36,7 +36,8 @@ def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description="Đọc luồng + tracking + luật, đẩy sự cố sang Frigate")
     p.add_argument("--source", default="0", help="RTSP URL, đường dẫn file, hoặc số hiệu webcam")
     p.add_argument("--camera", default="xuong_han", help="Tên camera, phải trùng tên trong Frigate")
-    p.add_argument("--model", default="yolo26n.pt")
+    p.add_argument("--model", default="yolo26n-pose.pt",
+                   help="Mô hình chính có bám vết. Mặc định là mô hình tư thế để luật ngã chạy được")
     p.add_argument("--extra-model", action="append", default=[], metavar="PATH",
                    help="Mô hình phụ chạy song song, không bám vết, vd models/fire_smoke_v0.pt (lặp lại được)")
     p.add_argument("--device", default="0", help="0 = GPU đầu tiên, cpu = chạy CPU")
@@ -92,6 +93,9 @@ def main(argv: list[str] | None = None) -> int:
         device=args.device,
         conf=args.conf,
     )
+    if getattr(pipeline.model, "task", None) != "pose":
+        log.warning("Mô hình %s không có điểm khớp: luật ngã sẽ không báo gì "
+                    "(dùng --model yolo26n-pose.pt)", args.model)
     source = FrameSource(parse_source(args.source), target_fps=args.fps)
     outputs = build_outputs(args.frigate, args.camera, telegram=args.telegram,
                             db_path=db_path(args.db))

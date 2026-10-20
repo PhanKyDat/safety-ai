@@ -9,6 +9,7 @@ Vì vậy luật đếm theo mốc thời gian có dung sai mất dấu, chứ k
 
 from __future__ import annotations
 
+import math
 from collections import deque
 from dataclasses import dataclass, field
 
@@ -244,3 +245,132 @@ class FireRule:
             if fraction_inside(detection.bbox, box) >= self.config.min_inside:
                 return True
         return False
+
+
+@dataclass(frozen=True)
+class FallConfig:
+    lying_angle: float = 60.0
+    leg_angle: float = 45.0
+    kp_conf: float = 0.3
+    duration: float = 3.0
+    gap_tolerance: float = 1.0
+    cooldown: float = 60.0
+    min_inside: float = 0.5
+    exclude: tuple[ExcludeZone, ...] = ()
+
+
+def _tilt(top: tuple[float, float], bottom: tuple[float, float]) -> float:
+    """Góc lệch khỏi phương thẳng đứng, độ: 0 là đứng thẳng, 90 là nằm ngang."""
+    dx, dy = abs(top[0] - bottom[0]), abs(bottom[1] - top[1])
+    return math.degrees(math.atan2(dx, dy))
+
+
+def _mid(points, idx: tuple[int, int], min_conf: float) -> tuple[float, float] | None:
+    a, b = points[idx[0]], points[idx[1]]
+    if a.conf < min_conf or b.conf < min_conf:
+        return None
+    return (a.x + b.x) / 2, (a.y + b.y) / 2
+
+
+def body_tilt(person: Detection, min_conf: float = 0.3) -> tuple[float | None, float | None]:
+    """(góc thân, góc chân) theo điểm khớp COCO. Không thấy rõ thì trả None cho phần đó.
+
+    Thân: giữa hai vai -> giữa hai hông. Chân: giữa hai hông -> giữa hai cổ chân,
+    không thấy cổ chân thì lấy đầu gối.
+    """
+    k = person.keypoints
+    if not k or len(k) < 17:
+        return None, None
+    shoulders = _mid(k, (5, 6), min_conf)
+    hips = _mid(k, (11, 12), min_conf)
+    if shoulders is None or hips is None:
+        return None, None
+    feet = _mid(k, (15, 16), min_conf) or _mid(k, (13, 14), min_conf)
+    return _tilt(shoulders, hips), (_tilt(hips, feet) if feet is not None else None)
+
+
+@dataclass
+class FallRule:
+    """Luật người ngã / nằm: thân nằm ngang liên tục `duration` giây thì báo.
+
+    Dùng mô hình tư thế có sẵn (yolo26n-pose), không train. Đo trên video nhà kho
+    (20/10, 98 lần thấy người đi đứng): góc thân trung vị 13°, lớn nhất 41°, nên
+    ngưỡng nằm là 60°. Không dựa vào tỉ lệ khung người: người đi bị kệ che một phần
+    đã có khung rộng gấp 1,78 lần cao.
+
+    Người cúi nhặt đồ cũng có thân gần nằm ngang, nhưng chân vẫn đứng. Vì vậy thấy
+    được chân thì chân cũng phải nghiêng quá `leg_angle` mới tính là nằm.
+
+    Không thấy rõ vai và hông (30% số lần trên video thử) thì chưa kết luận: giữ
+    nguyên đồng hồ, giống luật đồ bảo hộ.
+
+    Giới hạn: người nằm dọc theo hướng nhìn của camera trông như đứng (bị co ngắn),
+    luật không bắt được; cần video thật để đo.
+    """
+
+    camera: str
+    config: FallConfig = field(default_factory=FallConfig)
+    _streaks: dict[int, _Streak] = field(default_factory=dict, init=False)
+
+    def streak_of(self, track_id: int) -> _Streak | None:
+        return self._streaks.get(track_id)
+
+    def lying(self, person: Detection, frame: FrameResult) -> bool | None:
+        """True nếu đang nằm, False nếu đứng/cúi hoặc trong vùng loại trừ, None nếu chưa rõ."""
+        for zone in self.config.exclude:
+            if fraction_inside(person.bbox, zone.to_bbox(frame.width, frame.height)) >= self.config.min_inside:
+                return False
+        torso, legs = body_tilt(person, self.config.kp_conf)
+        if torso is None:
+            return None
+        if torso < self.config.lying_angle:
+            return False
+        return legs is None or legs >= self.config.leg_angle
+
+    def update(self, frame: FrameResult) -> list[Incident]:
+        incidents: list[Incident] = []
+        for person in frame.detections:
+            if person.cls is not DetectClass.PERSON or person.track_id is None:
+                continue
+            incident = self._advance(person, frame.ts, self.lying(person, frame))
+            if incident is not None:
+                incidents.append(incident)
+        self._prune(frame.ts)
+        return incidents
+
+    def _advance(self, person: Detection, ts: float, lying: bool | None) -> Incident | None:
+        track_id = person.track_id
+        if lying is False:
+            streak = self._streaks.get(track_id)
+            if streak is not None:
+                streak.since = None      # giữ last_alert để người vừa đứng dậy rồi nằm lại không báo dồn
+            return None
+        if lying is None:
+            return None
+
+        streak = self._streaks.setdefault(track_id, _Streak())
+        if streak.since is None or (ts - streak.last_hit) > self.config.gap_tolerance:
+            streak.since = ts
+        streak.last_hit = ts
+        streak.score = person.conf
+
+        if ts - streak.since < self.config.duration:
+            return None
+        if streak.last_alert is not None and ts - streak.last_alert < self.config.cooldown:
+            return None
+        streak.last_alert = ts
+        return Incident(
+            camera=self.camera,
+            label=IncidentLabel.FALL,
+            severity=DEFAULT_SEVERITY[IncidentLabel.FALL],
+            score=streak.score,
+            ts=ts,
+            sub_label=f"ID {track_id} - nằm {ts - streak.since:.0f}s",
+            track_id=track_id,
+        )
+
+    def _prune(self, ts: float) -> None:
+        limit = self.config.cooldown + self.config.duration
+        for key, streak in list(self._streaks.items()):
+            if streak.last_hit is not None and ts - streak.last_hit > limit:
+                del self._streaks[key]

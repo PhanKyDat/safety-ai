@@ -107,10 +107,10 @@ def verify(api: str, incidents: list[Incident]) -> int:
 
 def main() -> int:
     p = argparse.ArgumentParser()
-    p.add_argument("--source", default="rtsp://127.0.0.1:8554/xuong_han_sub")
+    p.add_argument("--source", default="rtsp://127.0.0.1:8554/xuong_han")
     p.add_argument("--camera", default="xuong_han")
     p.add_argument("--frigate", default="http://127.0.0.1:5000/api")
-    p.add_argument("--model", default="yolo26n.pt")
+    p.add_argument("--model", default="yolo26n-pose.pt")
     p.add_argument("--extra-model", action="append", default=[], metavar="PATH",
                    help="Mo hinh phu chay song song, khong bam vet, vd models/fire_smoke_v0.pt (lap lai duoc)")
     p.add_argument("--device", default="0")

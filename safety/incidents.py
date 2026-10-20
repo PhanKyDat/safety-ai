@@ -13,7 +13,7 @@ from pathlib import Path
 import numpy as np
 
 from safety.contracts import Detection, DetectClass, FrameResult, Incident, IncidentLabel
-from safety.rules import FireConfig, FireRule, PPEConfig, PPERule
+from safety.rules import FallConfig, FallRule, FireConfig, FireRule, PPEConfig, PPERule
 
 log = logging.getLogger(__name__)
 
@@ -25,6 +25,9 @@ _EVIDENCE = {
     IncidentLabel.FIRE: DetectClass.FIRE,
     IncidentLabel.SMOKE: DetectClass.SMOKE,
 }
+
+# Sự cố mà vật bằng chứng đứng yên, nên Frigate khoanh đúng dù chụp muộn hơn module ~0,3 s.
+_STILL = {*_EVIDENCE, IncidentLabel.FALL}
 
 
 def snapshot_name(incident: Incident) -> str:
@@ -99,22 +102,25 @@ class IncidentProcessor:
         snapshot_dir: str | Path | None = "snapshots",
         ppe: PPEConfig | None = None,
         fire: FireConfig | None = None,
+        fall: FallConfig | None = None,
     ):
         self.camera = camera
         self.publisher = publisher
         self.snapshot_dir = snapshot_dir
         self.ppe = PPERule(camera, ppe or PPEConfig())
         self.fire = FireRule(camera, fire or FireConfig())
+        # Cần mô hình tư thế (có điểm khớp); mô hình thường thì luật ngã không bao giờ báo.
+        self.fall = FallRule(camera, fall or FallConfig())
 
     def handle(self, image: np.ndarray, result: FrameResult) -> list[Incident]:
-        incidents = self.ppe.update(result) + self.fire.update(result)
+        incidents = self.ppe.update(result) + self.fire.update(result) + self.fall.update(result)
         for incident in incidents:
             found = evidence(result, incident, skip=lambda d: self.fire._excluded(d, result))
-            if incident.label in _EVIDENCE:
-                # Chỉ khoanh trong Frigate cho cháy/khói. Frigate không nhận ảnh của module mà
+            if incident.label in _STILL:
+                # Chỉ khoanh trong Frigate cho thứ đứng yên: cháy/khói, người nằm. Frigate không nhận ảnh của module mà
                 # tự chụp khung đang có lúc nhận sự cố, khung đó đi trước khung của module
                 # ~0,3 giây (độ trễ restream, đo 20/10) cộng thời gian xử lý: người đang đi đã
-                # dịch chỗ nên hộp rơi vào khoảng trống. Lửa, khói đứng yên nên vẫn khoanh đúng.
+                # dịch chỗ nên hộp rơi vào khoảng trống. Lửa, khói, người đã nằm thì vẫn khoanh đúng.
                 incident.boxes = tuple(relative_box(d, result.width, result.height) for d in found)
             if self.snapshot_dir is not None:
                 incident.snapshot = save_snapshot(image, result, incident, self.snapshot_dir, found)
