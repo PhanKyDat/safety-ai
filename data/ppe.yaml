@@ -1,0 +1,12 @@
+path: D:/safety-ai/data/ppe_split
+
+train: train/images
+val: val/images
+test: test/images
+
+names:
+  0: person
+  1: helmet
+  2: no_helmet
+  3: vest
+  4: no_vest
