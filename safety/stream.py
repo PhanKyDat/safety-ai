@@ -10,7 +10,7 @@ import logging
 import os
 import threading
 import time
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping
 
 import cv2
 import numpy as np
@@ -120,11 +120,24 @@ class FrameSource:
                 cap.release()
             self._dead.set()
 
-    def _iter_live(self) -> Iterator[tuple[float, np.ndarray]]:
+    def start(self) -> None:
+        """Bật thread đọc của luồng trực tiếp; từ đó latest() luôn có khung mới nhất."""
         self._stop.clear()
         self._dead.clear()
         self._reader = threading.Thread(target=self._read_loop, daemon=True)
         self._reader.start()
+
+    def latest(self) -> tuple[float, np.ndarray] | None:
+        with self._lock:
+            return self._latest
+
+    @property
+    def dead(self) -> bool:
+        """Thread đọc đã dừng hẳn (hết số lần thử kết nối lại, hoặc đã close)."""
+        return self._dead.is_set()
+
+    def _iter_live(self) -> Iterator[tuple[float, np.ndarray]]:
+        self.start()
 
         last_ts = 0.0
         next_due = 0.0
@@ -173,3 +186,84 @@ class FrameSource:
                 idx += 1
         finally:
             cap.release()
+
+
+class MultiSource:
+    """Gom khung của nhiều camera thành lô [(camera, ts, frame), ...] cho process_batch.
+
+    Luồng trực tiếp: mỗi camera một FrameSource với thread đọc riêng, chỉ giữ khung
+    mới nhất; cứ mỗi 1/target_fps giây gom các camera có khung mới thành một lô.
+    Camera mất luồng thì vắng mặt trong lô, các camera khác vẫn chạy đều nhịp.
+
+    Tệp video: mỗi lô lấy khung kế tiếp (theo thời gian trong video) của từng tệp,
+    tệp nào hết thì vắng mặt; chạy lại cho ra đúng kết quả cũ như FrameSource.
+    """
+
+    def __init__(self, sources: Mapping[str, str | int], target_fps: float = DEFAULT_FPS, **source_kw):
+        if not sources:
+            raise ValueError("Cần ít nhất một camera")
+        self.interval = 1.0 / target_fps if target_fps > 0 else 0.0
+        self.sources = {cam: FrameSource(url, target_fps=target_fps, **source_kw)
+                        for cam, url in sources.items()}
+        kinds = {cam: is_live(src.url) for cam, src in self.sources.items()}
+        if len(set(kinds.values())) > 1:
+            # Tệp đọc nhanh hết mức máy cho phép còn luồng trực tiếp đi theo đồng hồ,
+            # gom chung một lô thì thời gian của hai bên không còn khớp nhau.
+            raise ValueError(f"Không trộn luồng trực tiếp với tệp video trong một lần chạy: {kinds}")
+        self.live = next(iter(kinds.values()))
+
+    def __iter__(self) -> Iterator[list[tuple[str, float, np.ndarray]]]:
+        return self._iter_live() if self.live else self._iter_files()
+
+    def close(self) -> None:
+        for src in self.sources.values():
+            src.close()
+
+    def __enter__(self) -> MultiSource:
+        return self
+
+    def __exit__(self, *exc) -> None:
+        self.close()
+
+    def _iter_files(self) -> Iterator[list[tuple[str, float, np.ndarray]]]:
+        iters = {cam: iter(src) for cam, src in self.sources.items()}
+        try:
+            while iters:
+                batch = []
+                for cam, it in list(iters.items()):
+                    item = next(it, None)
+                    if item is None:
+                        del iters[cam]
+                        continue
+                    batch.append((cam, *item))
+                if batch:
+                    yield batch
+        finally:
+            for it in iters.values():
+                it.close()
+
+    def _iter_live(self) -> Iterator[list[tuple[str, float, np.ndarray]]]:
+        for src in self.sources.values():
+            src.start()
+        last = {cam: 0.0 for cam in self.sources}
+        next_due = 0.0
+        try:
+            while not all(src.dead for src in self.sources.values()):
+                now = time.time()
+                if now < next_due:
+                    time.sleep(next_due - now)
+                    continue
+                batch = []
+                for cam, src in self.sources.items():
+                    item = src.latest()
+                    if item is None or item[0] == last[cam]:
+                        continue
+                    last[cam] = item[0]
+                    batch.append((cam, *item))
+                if not batch:
+                    time.sleep(0.005)
+                    continue
+                next_due = now + self.interval
+                yield batch
+        finally:
+            self.close()

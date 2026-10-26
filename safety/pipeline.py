@@ -1,7 +1,13 @@
 """Chạy YOLO + tracking trên từng khung hình, trả về FrameResult theo contract.
 
-Mỗi camera phải có một SafetyPipeline riêng: tracker giữ trạng thái giữa các
-khung, trộn hai luồng vào một pipeline sẽ làm track_id nhảy loạn.
+Một SafetyPipeline phục vụ nhiều camera: mỗi mô hình chỉ nạp một lần và chạy
+theo lô (một lô = khung mới nhất của mọi camera), còn bộ bám vết thì mỗi camera
+một cái. GPU 4 GB không chứa nổi 4–8 bản sao của ba mô hình (tư thế, đồ bảo hộ,
+cháy), nên không thể chạy mỗi camera một tiến trình. Bộ bám vết thì không được
+dùng chung: trộn hai luồng vào một tracker sẽ làm track_id nhảy loạn. Vì vậy ở
+đây không gọi model.track() (Ultralytics giữ một tracker bên trong mô hình) mà
+tự giữ BYTETracker theo tên camera, làm đúng các bước callback bám vết của
+Ultralytics làm.
 
 Mô hình chính (người, đồ bảo hộ) chạy kèm bám vết vì luật PPE đếm giờ theo
 từng người. Mô hình phụ (cháy/khói) chỉ nhận diện, không bám vết: lửa không có
@@ -12,9 +18,10 @@ hình đồ bảo hộ là hai tệp riêng, nên mỗi khung chạy hai lần s
 from __future__ import annotations
 
 import logging
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 
 import numpy as np
+import torch
 from ultralytics import YOLO
 
 from safety.contracts import BBox, Detection, DetectClass, FrameResult, Keypoint
@@ -54,11 +61,14 @@ class SafetyPipeline:
         imgsz: int | None = None,
         tracker: str = "bytetrack.yaml",
         extra_models: Sequence[str] = (),
+        tracker_factory: Callable[[], object] | None = None,
     ):
         self.camera = camera
         self.device = device
         self.conf = conf
         self.tracker = tracker
+        self._new_tracker = tracker_factory or (lambda: _make_tracker(tracker, device))
+        self._trackers: dict[str, object] = {}
         self.model = YOLO(model)
         # Mặc định chạy mỗi mô hình ở đúng cỡ ảnh nó được train. Đo 16/10: mô hình cháy
         # train ở 512 mà ép chạy ở 640 thì báo nhầm lửa tăng từ 4,7% lên 15,1% số khung.
@@ -100,29 +110,72 @@ class SafetyPipeline:
         return found
 
     def process(self, ts: float, frame: np.ndarray) -> FrameResult:
-        results = self.model.track(
-            frame,
-            persist=True,
-            tracker=self.tracker,
-            device=self.device,
-            conf=self.conf,
-            imgsz=self.imgsz,
-            verbose=False,
-        )
-        detections = list(_detections(results[0], self.classes))
-        for extra, mapping, size in self.extras:
-            res = extra.predict(frame, device=self.device, conf=self.conf,
-                                imgsz=size, verbose=False)
-            detections.extend(_detections(res[0], mapping))
+        """Một khung của camera mặc định (tên camera truyền lúc tạo pipeline)."""
+        return self.process_batch([(self.camera, ts, frame)])[0]
 
-        height, width = frame.shape[:2]
-        return FrameResult(
-            camera=self.camera,
-            ts=ts,
-            width=width,
-            height=height,
-            detections=tuple(detections),
-        )
+    def process_batch(self, items: Sequence[tuple[str, float, np.ndarray]]) -> list[FrameResult]:
+        """Mỗi phần tử là (camera, ts, frame); trả về FrameResult cùng thứ tự.
+
+        Một lô không được có hai khung cùng camera: bộ bám vết của camera đó sẽ
+        nhận hai khung trong một bước và coi như hai thời điểm liên tiếp.
+        """
+        if not items:
+            return []
+        cameras = [cam for cam, _, _ in items]
+        if len(set(cameras)) != len(cameras):
+            raise ValueError(f"Một lô có hai khung cùng camera: {cameras}")
+        frames = [frame for _, _, frame in items]
+
+        results = self.model.predict(frames, device=self.device, conf=self.conf,
+                                     imgsz=self.imgsz, verbose=False)
+        per_frame = []
+        for cam, result in zip(cameras, results):
+            result = self._track(cam, result)
+            per_frame.append(list(_detections(result, self.classes)))
+
+        for extra, mapping, size in self.extras:
+            extra_results = extra.predict(frames, device=self.device, conf=self.conf,
+                                          imgsz=size, verbose=False)
+            for dets, res in zip(per_frame, extra_results):
+                dets.extend(_detections(res, mapping))
+
+        out = []
+        for (cam, ts, frame), dets in zip(items, per_frame):
+            height, width = frame.shape[:2]
+            out.append(FrameResult(camera=cam, ts=ts, width=width, height=height,
+                                   detections=tuple(dets)))
+        return out
+
+    def _track(self, camera: str, result):
+        """Gắn track_id cho kết quả của một camera, giống callback bám vết của Ultralytics.
+
+        Tracker không trả về gì (vd khung đầu, hay chưa đủ điểm tin cậy để mở mã mới)
+        thì giữ nguyên kết quả không có mã, như model.track() vẫn làm: luật bỏ qua
+        người chưa có mã chứ không đếm sai.
+        """
+        tracker = self._trackers.get(camera)
+        if tracker is None:
+            tracker = self._trackers[camera] = self._new_tracker()
+        boxes = result.boxes
+        if boxes is None:
+            return result
+        tracks = tracker.update(boxes.cpu().numpy(), result.orig_img)
+        if len(tracks) == 0:
+            return result
+        result = result[tracks[:, -1].astype(int)]
+        result.update(boxes=torch.as_tensor(tracks[:, :-1], device=boxes.data.device))
+        return result
+
+
+def _make_tracker(config: str, device):
+    """BYTETracker dựng từ tệp cấu hình y như Ultralytics dựng khi gọi model.track()."""
+    from ultralytics.trackers.track import TRACKER_MAP
+    from ultralytics.utils import YAML, IterableSimpleNamespace
+    from ultralytics.utils.checks import check_yaml
+
+    cfg = IterableSimpleNamespace(**YAML.load(check_yaml(config)))
+    cfg.device = device
+    return TRACKER_MAP[cfg.tracker_type](args=cfg)
 
 
 def _trained_imgsz(model, default: int = 640) -> int:

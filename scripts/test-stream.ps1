@@ -39,6 +39,10 @@ if (-not (Get-Process mediamtx -ErrorAction SilentlyContinue)) {
 $ffArgs = @(
     "-re", "-stream_loop", "-1", "-i", $videoPath,
     "-c:v", "libx264", "-preset", "ultrafast", "-tune", "zerolatency",
+    # Khung khoá mỗi giây, giống camera thật và rtsp-sim trong Docker (-g 25). Mặc định
+    # của x264 là 250 khung (~10 s): module mở luồng phải chờ tới khung khoá kế tiếp, nên
+    # 8 camera mở lần lượt mất gần 40 s mới đủ (đo 26/10).
+    "-force_key_frames", "expr:gte(t,n_forced*1)",
     "-an", "-f", "rtsp", "rtsp://localhost:8554/$Path"
 )
 Start-Process ffmpeg -ArgumentList $ffArgs -WindowStyle Hidden

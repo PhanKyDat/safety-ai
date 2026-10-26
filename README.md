@@ -69,7 +69,9 @@ Khi chưa có Frigate, tự dựng một luồng RTSP để thử (cần `mediam
 .\scripts\test-stream.ps1 -Stop
 ```
 
-Khi Frigate của Uy chạy, chỉ đổi URL sang `rtsp://<frigate_host>:8554/<camera>_sub`, không phải sửa code.
+Khi Frigate của Uy chạy, chỉ đổi URL sang `rtsp://<frigate_host>:8554/<camera>`, không phải sửa code.
+Đọc luồng **chính**, không đọc luồng phụ `<camera>_sub`: luồng phụ nén mạnh làm mô hình cháy
+nhận sàn xám là khói ở 22% số khung (luồng chính 4%), xem [docs/data-contract.md](docs/data-contract.md).
 
 ### Đẩy sự cố sang Frigate
 
@@ -95,6 +97,33 @@ docker compose up -d
 ```
 
 `--camera` phải trùng tên camera trong Frigate, sai thì module báo lỗi ngay lúc khởi động.
+
+### Nhiều camera trong một tiến trình
+
+Mỗi camera thêm một `--cam TEN=NGUON` (có `--cam` thì bỏ qua `--camera`/`--source`). Mỗi mô hình
+chỉ nạp một lần và chạy theo lô (khung mới nhất của mọi camera), còn bộ bám vết thì mỗi camera
+một cái, nên mã người của hai camera không lẫn nhau:
+
+```powershell
+.venv\Scripts\python.exe -m safety.cli --cam xuong_han=rtsp://127.0.0.1:8554/xuong_han `
+    --cam kho=rtsp://127.0.0.1:8554/kho --extra-model models\ppe_v1_finetune_best.pt `
+    --extra-model models\fire_v1_yolo26s.pt --frigate http://127.0.0.1:5000/api
+```
+
+Đo ngày 26/10 trên RTX 3050 Ti 4 GB, 3 mô hình (tư thế + đồ bảo hộ + cháy), luồng 720p 25 khung/giây:
+
+| | 1 camera | 4 camera | 8 camera |
+|---|---|---|---|
+| Chỉ suy luận (khung có sẵn) | 40 ms/lô | 67 ms/lô | 121 ms/lô, GPU dùng ~370 MB |
+| Chạy thật qua RTSP | | 4,84 khung/giây/camera | 4,46 khung/giây/camera (199 ms/lô) |
+
+Chỗ nghẽn khi chạy thật là **CPU giải mã video**, không phải GPU: chỉ đọc 8 luồng đã tốn 22% CPU
+của máy (bộ giả lập phát 8 luồng tốn thêm 26%, lúc chạy thật không có phần này). Giải mã bằng GPU
+qua OpenCV không đỡ được (27%). Vì vậy TensorRT không giúp mấy cho 8 camera; muốn nhẹ hơn thì đặt
+luồng chính của camera ở 10 khung/giây thay vì 25 (module chỉ cần 5).
+
+Mở luồng RTSP thì các camera phải xếp hàng (OpenCV khoá khi mở), mỗi camera chờ tới khung khoá kế
+tiếp. Camera đặt khung khoá mỗi 1–2 giây như Frigate khuyên thì 8 camera kết nối xong trong ~14 giây.
 
 Thêm `--telegram` để gửi tiếp vào nhóm Telegram chung, cùng bot và cùng kiểu tin với
 cảnh báo vùng nguy hiểm. Mã bot và chat id lấy từ `.env` (`TELEGRAM_BOT_TOKEN`,

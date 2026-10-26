@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import logging
 import sqlite3
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 
 from safety.alerts import TelegramPublisher, notifier_from_env
 from safety.contracts import Incident
@@ -72,7 +72,7 @@ class Outputs:
 
 def build_outputs(
     frigate_api: str | None,
-    camera: str,
+    camera: str | Sequence[str],
     telegram: bool = False,
     telegram_when: Callable[[Incident], bool] | None = None,
     env: Mapping[str, str] | None = None,
@@ -109,9 +109,11 @@ def build_outputs(
         cameras = client.cameras()
         if cameras is None:
             log.warning("Chưa gọi được Frigate; vẫn chạy, sự cố sẽ được thử gửi khi có")
-        elif camera not in cameras:
-            # Sai tên camera thì Frigate từ chối mọi sự cố, nên báo ngay từ đầu.
-            log.error("Frigate không có camera '%s' (đang có: %s)", camera, ", ".join(sorted(cameras)))
+        else:
+            # Sai tên camera thì Frigate từ chối mọi sự cố của camera đó, nên báo ngay từ đầu.
+            for name in [camera] if isinstance(camera, str) else camera:
+                if name not in cameras:
+                    log.error("Frigate không có camera '%s' (đang có: %s)", name, ", ".join(sorted(cameras)))
         out.frigate = FrigatePublisher(client, on_done=out.after_frigate)
     else:
         log.info("Không có --frigate: sự cố không gửi sang Frigate")
