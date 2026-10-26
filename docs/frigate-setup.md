@@ -18,7 +18,7 @@ data/samples/xuong_han.mp4
        ▼
 ┌──────────────────────────┐     ┌───────────┐
 │ frigate                  │────►│ mosquitto │  127.0.0.1:1883
-│  go2rtc restream  :8554 ─┼──► module trên host: rtsp://127.0.0.1:8554/xuong_han_sub
+│  go2rtc restream  :8554 ─┼──► module trên host: rtsp://127.0.0.1:8554/xuong_han
 │  web + đăng nhập  :8971  │
 │  API nội bộ       :5000  │  (không mở ra host)
 └──────────────────────────┘
@@ -26,7 +26,11 @@ data/samples/xuong_han.mp4
 
 `rtsp-sim` đóng vai camera IP có 2 luồng. Đổi sang camera thật (tuần 8) chỉ cần sửa
 `go2rtc.streams` trong `frigate/config.yml`; module không phải sửa gì vì vẫn đọc
-`rtsp://<frigate_host>:8554/xuong_han_sub`.
+`rtsp://<frigate_host>:8554/xuong_han`.
+
+> **Module đọc luồng CHÍNH, Frigate vẫn detect bằng luồng phụ.** Từ tuần 7, module của
+> Đạt chuyển sang `xuong_han` vì luồng phụ nén mạnh làm mô hình cháy nhận sàn xám là
+> khói ở 22% số khung, luồng chính chỉ 4%. Phía Frigate không phải đổi gì.
 
 | File | Việc |
 |---|---|
@@ -122,8 +126,9 @@ Proceed*). Đăng nhập rồi đổi mật khẩu ngay. Quên mật khẩu: th�
 .\scripts\frigate-check.ps1
 ```
 
-Script kiểm tra container, API, camera có hình và có detect, tốc độ detector, restream
-`xuong_han_sub` và cổng 8554 trên host. Tất cả `[ OK ]` là xong tuần 1.
+Script kiểm tra container, API, camera có hình và có detect, tốc độ detector, cả hai
+restream (`xuong_han_sub` cho Frigate detect, `xuong_han` cho module đọc) và cổng 8554
+trên host. Tất cả `[ OK ]` là xong tuần 1.
 
 Lưu ý: config sai thì Frigate vẫn chạy và báo *healthy*, nhưng ở chế độ an toàn không
 có camera nào. Script sẽ báo "Frigate khong co camera"; lỗi cụ thể nằm trong log, tìm
@@ -224,7 +229,7 @@ Nên module phải xét cả `update`, và nhớ `id` đã báo để không g�
 
 ```powershell
 .\scripts\frigate-check.ps1
-.\.venv\Scripts\python.exe -m safety.cli --source rtsp://127.0.0.1:8554/xuong_han_sub
+.\.venv\Scripts\python.exe -m safety.cli --source rtsp://127.0.0.1:8554/xuong_han
 ```
 
 Module in ra `FrameResult` liên tục là đạt M1 (Đạt đã chạy được trên máy Đạt).
