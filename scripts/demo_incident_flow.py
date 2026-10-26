@@ -15,6 +15,11 @@ rõ "GIẢ LẬP" trong mô tả, cả trong Frigate lẫn tin Telegram.
 Thêm --telegram để gửi tiếp vào nhóm Telegram chung, mặc định tối đa 2 tin:
 
     python scripts/demo_incident_flow.py --seconds 25 --telegram
+
+Nhiều camera (tên phải có trong Frigate), kiểm luôn sự cố nằm đúng camera:
+
+    python scripts/demo_incident_flow.py --cam xuong_han=rtsp://127.0.0.1:8554/xuong_han \
+        --cam kho_1=rtsp://127.0.0.1:8554/xuong_han --seconds 40
 """
 
 from __future__ import annotations
@@ -32,13 +37,13 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 from demo_fire_rule import FIRE_AT, box_of
 from demo_ppe_rule import fake_no_helmet
 
-from safety.cli import _rate
+from safety.cli import _rate, camera_sources
 from safety.contracts import Detection, DetectClass, FrameResult, Incident
 from safety.frigate import FrigateClient
 from safety.incidents import IncidentProcessor
 from safety.outputs import build_outputs
 from safety.pipeline import SafetyPipeline
-from safety.stream import FrameSource
+from safety.stream import MultiSource
 
 log = logging.getLogger("demo")
 
@@ -96,9 +101,11 @@ def verify(api: str, incidents: list[Incident]) -> int:
         ev = r.json()
         clip = requests.head(f"{api}/events/{inc.frigate_event_id}/clip.mp4", timeout=10)
         has_clip = ev.get("has_clip") and clip.status_code == 200
-        ok += bool(has_clip)
+        right_camera = ev.get("camera") == inc.camera
+        ok += bool(has_clip and right_camera)
         length = (ev["end_time"] - ev["start_time"]) if ev.get("end_time") else None
-        print(f"  {ev['label']:<10} sub_label={ev.get('sub_label')!s:<22} "
+        print(f"  {ev.get('camera')!s:<10}{'' if right_camera else ' (SAI CAMERA, gui tu ' + inc.camera + ')'} "
+              f"{ev['label']:<10} sub_label={ev.get('sub_label')!s:<22} "
               f"score={ev.get('data', {}).get('top_score', ev.get('top_score'))}  "
               f"ghi_hinh={'CO' if has_clip else 'KHONG'}  "
               f"dai={f'{length:.0f}s' if length else 'dang mo'}  id={ev['id']}")
@@ -109,6 +116,8 @@ def main() -> int:
     p = argparse.ArgumentParser()
     p.add_argument("--source", default="rtsp://127.0.0.1:8554/xuong_han")
     p.add_argument("--camera", default="xuong_han")
+    p.add_argument("--cam", action="append", default=[], metavar="TEN=NGUON",
+                   help="Them mot camera (lap lai duoc); co --cam thi bo qua --camera/--source")
     p.add_argument("--frigate", default="http://127.0.0.1:5000/api")
     p.add_argument("--model", default="yolo26n-pose.pt")
     p.add_argument("--extra-model", action="append", default=[], metavar="PATH",
@@ -129,7 +138,8 @@ def main() -> int:
     args = p.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
 
-    pipeline = SafetyPipeline(model=args.model, camera=args.camera, device=args.device,
+    cams = camera_sources(args)
+    pipeline = SafetyPipeline(model=args.model, camera=next(iter(cams)), device=args.device,
                               extra_models=args.extra_model)
     have = pipeline.detect_classes
     fake_ppe = DetectClass.NO_HELMET not in have
@@ -140,46 +150,51 @@ def main() -> int:
     if cameras is None:
         # Giống safety.cli: Frigate tắt thì vẫn chạy, để thử luôn trường hợp Frigate sập.
         print(f"KHONG goi duoc Frigate o {args.frigate}, van chay tiep")
-    elif args.camera not in cameras:
-        print(f"Frigate khong co camera {args.camera} (dang co: {sorted(cameras)})")
+    elif missing := [c for c in cams if c not in cameras]:
+        print(f"Frigate khong co camera {missing} (dang co: {sorted(cameras)})")
         return 1
 
-    outputs = build_outputs(args.frigate, args.camera, telegram=args.telegram,
+    outputs = build_outputs(args.frigate, list(cams), telegram=args.telegram,
                             telegram_when=at_most(args.telegram_max), db_path=args.db)
     marked = MarkSimulated(outputs, active=fake_ppe or fake_fire)
-    processor = IncidentProcessor(args.camera, publisher=marked, snapshot_dir=args.snapshots)
+    processors = {cam: IncidentProcessor(cam, publisher=marked, snapshot_dir=args.snapshots)
+                  for cam in cams}
 
     found: list[Incident] = []
     frames, slowest_handle = 0, 0.0
     frame_at: list[float] = []
     deadline = time.time() + args.seconds
-    for ts, frame in FrameSource(args.source, target_fps=args.fps):
+    source = MultiSource(cams, target_fps=args.fps)
+    for batch in source:
         frame_at.append(time.time())
-        result = inject(pipeline.process(ts, frame), fake_ppe, fake_fire)
+        results = pipeline.process_batch(batch)
         t0 = time.perf_counter()
-        for inc in processor.handle(frame, result):
-            found.append(inc)
-            print(f"[{time.strftime('%H:%M:%S')}] SU CO {inc.label.value} ({inc.severity.value}) "
-                  f"{inc.sub_label}  anh={inc.snapshot}")
+        for (cam, _, frame), result in zip(batch, results):
+            for inc in processors[cam].handle(frame, inject(result, fake_ppe, fake_fire)):
+                found.append(inc)
+                print(f"[{time.strftime('%H:%M:%S')}] SU CO {cam}/{inc.label.value} ({inc.severity.value}) "
+                      f"{inc.sub_label}  anh={inc.snapshot}")
         slowest_handle = max(slowest_handle, time.perf_counter() - t0)
         frames += 1
         if time.time() >= deadline:
             break
+    source.close()
 
     loop_seconds = time.time() - (deadline - args.seconds)
     outputs.close()
     # Chia frames cho loop_seconds thì gộp cả lúc nối RTSP và khởi động GPU, ra thấp hơn nhịp thật.
-    print(f"\n{frames} khung trong {loop_seconds:.1f}s (tinh ca luc noi luong va khoi dong GPU), "
+    print(f"\n{frames} luot ({len(cams)} camera) trong {loop_seconds:.1f}s (tinh ca luc noi luong va khoi dong GPU), "
           f"{len(found)} su co")
     print(_rate(frame_at))
     print(outputs.summary())
-    print(f"buoc luat+chup anh+dua vao hang doi cham nhat: {1000 * slowest_handle:.1f} ms/khung")
+    print(f"buoc luat+chup anh+dua vao hang doi cham nhat: {1000 * slowest_handle:.1f} ms/luot "
+          f"({len(cams)} camera)")
 
     print(f"\ncho {args.verify_wait:.0f}s de Frigate dong su co va ghi xong doan video...")
     time.sleep(args.verify_wait)
     print("Kiem tra lai trong Frigate:")
     ok = verify(args.frigate, found)
-    print(f"\n{ok}/{len(found)} su co nam trong Frigate kem doan ghi hinh")
+    print(f"\n{ok}/{len(found)} su co nam trong Frigate, dung camera, kem doan ghi hinh")
     return 0 if found and ok == len(found) else 1
 
 
