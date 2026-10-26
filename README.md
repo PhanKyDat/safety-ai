@@ -147,6 +147,13 @@ Chưa có model PPE/cháy thì chạy thử cả đường đi bằng nhãn gi�
 .venv\Scripts\python.exe scripts\demo_incident_flow.py --seconds 25 --telegram
 ```
 
+Chấm module trên video kiểm thử có đáp án (F1 theo sự cố, AUROC/AUPRC theo đoạn, đường cong ROC/PR);
+cách ghi đáp án xem [docs/dap-an-video.md](docs/dap-an-video.md):
+
+```powershell
+.venv\Scripts\python.exe scripts\evaluate_videos.py data\test_videos\*.mp4 --extra-model models\ppe_v1_finetune_best.pt
+```
+
 Chạy kiểm thử luật sự cố (không cần camera hay model):
 
 ```powershell
