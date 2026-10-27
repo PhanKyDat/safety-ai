@@ -179,6 +179,18 @@ docker compose up -d
 
 Giao diện: <https://localhost:8971>. Module đọc `rtsp://127.0.0.1:8554/xuong_han`.
 
+## Bảng thống kê sự cố
+
+Đọc thẳng bảng `incidents` — cùng chỗ module và cầu nối MQTT ghi vào. Lọc theo ngày,
+camera, loại sự cố; có nút **Báo nhầm** ghi vào cột `false_alarm` và nút mở sự cố trong
+Frigate. Chi tiết: [docs/bang-thong-ke.md](docs/bang-thong-ke.md).
+
+```powershell
+.venv\Scripts\streamlit.exe run dashboard/app.py
+.venv\Scripts\python.exe scripts/seed_dashboard_demo.py --db data/incidents_demo.db   # du lieu mau
+.venv\Scripts\streamlit.exe run dashboard/app.py -- --db data/incidents_demo.db
+```
+
 ## Cảnh báo Telegram
 
 Nghe MQTT của Frigate, chuyển cảnh báo "người vào vùng nguy hiểm" sang Telegram và ghi DB.

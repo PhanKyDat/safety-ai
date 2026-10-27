@@ -6,6 +6,7 @@ opencv-python
 requests
 paho-mqtt
 streamlit
+pandas
 python-dotenv
 
 # Chỉ dùng khi chạy kiểm thử

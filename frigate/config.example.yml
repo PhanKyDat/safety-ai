@@ -65,9 +65,27 @@ snapshots:
   retain:
     default: 14
 
+# Object Classification của Frigate — bản đối chứng cho bài B1 (việc tuần 7).
+# Gắn thuộc tính "có mũ / không mũ" lên từng người Frigate đã bám vết, để so với
+# model YOLO + luật thời gian của nhóm. Cách huấn luyện: docs/doi-chung-b1.md
+#
+# Dùng attribute, KHÔNG dùng sub_label: mỗi người chỉ mang được một sub_label, mà
+# sau này còn thêm áo phản quang nữa thì hai thứ đè nhau.
+classification:
+  custom:
+    mu_bao_ho:
+      enabled: true
+      threshold: 0.8        # điểm tối thiểu cho mỗi lần phân loại
+      save_attempts: 200    # số lần phân loại giữ lại trong tab Recent Classifications
+      object_config:
+        objects: [person]
+        classification_type: attribute
+
 cameras:
   # Tên camera là khoá nối Frigate – module – DB – dashboard (docs/data-contract.md mục 5).
-  # snake_case, không dấu. Module đọc rtsp://<frigate_host>:8554/xuong_han_sub.
+  # snake_case, không dấu. Module của Đạt đọc LUỒNG CHÍNH
+  # rtsp://<frigate_host>:8554/xuong_han (luồng phụ nén mạnh làm mô hình cháy nhận
+  # nhầm sàn xám là khói). Frigate vẫn detect bằng luồng phụ như dưới đây.
   xuong_han:
     ffmpeg:
       inputs:

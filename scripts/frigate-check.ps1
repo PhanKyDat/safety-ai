@@ -74,17 +74,20 @@ if ($statsRaw) {
     }
 }
 
-# 5. Restream luong phu (cai module doc)
-$probeRaw = Frigate-Api "ffprobe?paths=rtsp://127.0.0.1:8554/${Camera}_sub"
-$probe = if ($probeRaw) { @($probeRaw | ConvertFrom-Json)[0] } else { $null }
-# Frigate 0.17 chi tra codec_long_name/width/height/avg_frame_rate, khong co codec_type.
-$v = if ($probe -and $probe.return_code -eq 0) {
-    $probe.stdout.streams | Where-Object { $_.width -gt 0 } | Select-Object -First 1
-}
-if ($v) {
-    Ok ("Restream ${Camera}_sub: {0}x{1} @ {2} fps, {3}" -f $v.width, $v.height, $v.avg_frame_rate, $v.codec_long_name)
-} else {
-    Fail "Khong doc duoc restream ${Camera}_sub. Kiem tra go2rtc.streams trong frigate\config.yml"
+# 5. Hai restream: luong phu Frigate dung de detect, luong chinh module cua Dat doc.
+foreach ($path in @("${Camera}_sub", $Camera)) {
+    $probeRaw = Frigate-Api "ffprobe?paths=rtsp://127.0.0.1:8554/$path"
+    $probe = if ($probeRaw) { @($probeRaw | ConvertFrom-Json)[0] } else { $null }
+    # Frigate 0.17 chi tra codec_long_name/width/height/avg_frame_rate, khong co codec_type.
+    $v = if ($probe -and $probe.return_code -eq 0) {
+        $probe.stdout.streams | Where-Object { $_.width -gt 0 } | Select-Object -First 1
+    }
+    $vai_tro = if ($path -like "*_sub") { "Frigate detect" } else { "module doc" }
+    if ($v) {
+        Ok ("Restream {0} ({1}): {2}x{3} @ {4} fps" -f $path, $vai_tro, $v.width, $v.height, $v.avg_frame_rate)
+    } else {
+        Fail "Khong doc duoc restream $path. Kiem tra go2rtc.streams trong frigate\config.yml"
+    }
 }
 
 # 6. Cong 8554 mo tren host (module chay ngoai Docker doc qua day)
@@ -156,4 +159,5 @@ if ($failed -gt 0) {
 }
 Write-Host "Frigate san sang. Giao dien: https://localhost:8971" -ForegroundColor Green
 Write-Host "Thu module (moc M1):"
-Write-Host "  .\.venv\Scripts\python.exe -m safety.cli --source rtsp://127.0.0.1:8554/${Camera}_sub"
+# Module doc luong CHINH (luong phu nen manh, mo hinh chay nham khoi); Frigate van detect bang luong phu.
+Write-Host "  .\.venv\Scripts\python.exe -m safety.cli --source rtsp://127.0.0.1:8554/${Camera}"
