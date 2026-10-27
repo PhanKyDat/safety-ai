@@ -119,8 +119,20 @@ docker-compose.yml  Frigate + Mosquitto + camera giả lập
 | Thành viên | Vai trò |
 |---|---|
 | Kỳ Đạt | Kiến trúc & Module AI — pipeline, tracking, luật, tích hợp Frigate API + MQTT, Docker Compose |
-| Nam Trường | Dữ liệu & mô hình — dataset, gán nhãn, train PPE + cháy, logic ngã (pose), TensorRT, đo độ chính xác |
+| Nam Trường | Dữ liệu & mô hình — dataset, gán nhãn, train PPE + cháy, logic ngã (pose), đo độ chính xác |
 | Long Uy | Quản trị Frigate & cảnh báo — cài Frigate, Mosquitto, Telegram, Streamlit, video kiểm thử |
+
+## Quy trình dữ liệu PPE tuần 7
+
+Quy tắc đầy đủ về tách clip, gán nhãn `head` và nghiệm thu video nằm trong [docs/ppe-week7-data-protocol.md](docs/ppe-week7-data-protocol.md).
+
+- `test_*.mp4` chỉ dùng để đo trên video thật; không cắt khung đưa vào train, không dò ngưỡng và không chọn checkpoint bằng tập này.
+- `train_*.mp4` dùng để cắt khung và gán nhãn cho train. Nếu cần bổ sung ảnh thực tế vào test, chỉ chọn các khung riêng, không trùng khung/đoạn train; ghi rõ nguồn và số hộp được thêm. Giữ nguyên test cũ và chỉ gộp thêm ảnh đã gán nhãn.
+- Ưu tiên khung camera kho/xưởng nhìn từ trên xuống, các trường hợp mũ lưỡi trai, mũ len, mũ trùm và đầu trần phải gán `no_helmet`; áo thường phải gán `no_vest`. Không gán `helmet`/`vest` chỉ vì đầu/thân có vật che.
+- Với mỗi checkpoint mới, chạy `scripts/measure_ppe_video.py` trên video `test_*.mp4` và ghi kết quả luật PPE phát hiện được. Chỉ coi bản mô hình đạt khi luật báo được sự cố cần phát hiện trên video thật.
+- TensorRT được hoãn; kết quả đo hiện tại cho thấy giải mã CPU mới là điểm nghẽn.
+
+Không commit video, ảnh người lao động, dataset hoặc trọng số mô hình vào repo public.
 
 ## Lưu ý
 
