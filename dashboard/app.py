@@ -115,7 +115,7 @@ c2.metric("Nghiêm trọng", tq["nghiem_trong"])
 c3.metric("Báo nhầm", tq["bao_nham"], f"{tq['ti_le_bao_nham']:.0%}")
 if tq["moi_nhat"]:
     gio, ngay = gio_dia_phuong(tq["moi_nhat"]).split()
-    c4.metric("Sự cố gần nhất", ngay[:5], gio, delta_color="off")
+    c4.metric("Sự cố gần nhất", f"{ngay[:5]} {gio[:5]}")
 else:
     c4.metric("Sự cố gần nhất", "—")
 
