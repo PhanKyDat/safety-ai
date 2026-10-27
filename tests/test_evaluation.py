@@ -12,6 +12,7 @@ from safety.evaluation import (
     average_precision,
     frame_scores,
     load_gt,
+    load_gt_table,
     match_events,
     parse_time,
     window_truth,
@@ -42,6 +43,26 @@ def test_dap_an_sai_nhan_hoac_sai_thoi_gian_thi_bao_loi(tmp_path, row):
     p.write_text("nhan,bat_dau,ket_thuc,ghi_chu\n" + row + "\n", encoding="utf-8")
     with pytest.raises(ValueError):
         load_gt(p)
+
+
+def test_doc_nhan_csv_chung_cua_thu_muc(tmp_path):
+    """Khung nhan.csv của kiem_tra_video_test.py: một bảng cho cả thư mục, mỗi dòng một khoảng."""
+    p = tmp_path / "nhan.csv"
+    p.write_text("tep,nhan,bat_dau_giay,ket_thuc_giay,ghi_chu\n"
+                 "test_khong_mu_01_ngay.mp4,no_helmet,5,20,\n"
+                 "test_khong_mu_01_ngay.mp4,no_helmet,0:30,0:41,quay lai\n"
+                 "test_binh_thuong_01_ngay.mp4,,,,\n", encoding="utf-8")
+    t = load_gt_table(p)
+    assert t["test_khong_mu_01_ngay.mp4"] == [GtEvent("no_helmet", 5, 20), GtEvent("no_helmet", 30, 41, "quay lai")]
+    assert t["test_binh_thuong_01_ngay.mp4"] == []  # có trong bảng, không vi phạm
+
+
+def test_khung_mau_chua_dien_thoi_gian_thi_bao_loi(tmp_path):
+    """Khung mẫu gợi ý sẵn nhãn theo tên tệp; quên điền giờ thì không được chấm như đáp án."""
+    p = tmp_path / "nhan.csv"
+    p.write_text("tep,nhan,bat_dau_giay,ket_thuc_giay,ghi_chu\ntest_nga_01_ngay.mp4,fall,,,\n", encoding="utf-8")
+    with pytest.raises(ValueError):
+        load_gt_table(p)
 
 
 GT = [GtEvent("no_helmet", 5, 20), GtEvent("no_helmet", 40, 50), GtEvent("fall", 60, 70)]

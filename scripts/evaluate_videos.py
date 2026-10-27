@@ -3,8 +3,9 @@ r"""Chấm module trên bộ video kiểm thử có đáp án: F1 theo sự cố
     .venv\Scripts\python.exe scripts/evaluate_videos.py data/test_videos/*.mp4 ^
         --extra-model models/ppe_v1_finetune_best.pt --extra-model models/fire_v1_yolo26s.pt
 
-Mỗi video cần tệp đáp án cùng tên, đuôi .csv (xem docs/dap-an-video.md và
-docs/mau-dap-an.csv). Kết quả in ra màn hình và ghi vào runs/eval/<thời điểm>/:
+Mỗi video cần đáp án: tệp .csv cùng tên, hoặc một dòng trong nhan.csv cùng thư mục
+(khung do scripts/kiem_tra_video_test.py --nhan tạo); xem docs/dap-an-video.md. Video
+train_* bị bỏ qua vì đã dùng để huấn luyện. Kết quả in ra màn hình và ghi vào runs/eval/<thời điểm>/:
 tong_hop.csv, su_co.csv (từng sự cố module báo), doan.csv (điểm từng đoạn) và
 roc_pr.png. Mỗi bản mô hình mới chạy lại lệnh này là có số mới để so.
 
@@ -34,6 +35,7 @@ from safety.evaluation import (
     average_precision,
     frame_scores,
     load_gt,
+    load_gt_table,
     match_events,
     pr_points,
     roc_points,
@@ -90,9 +92,31 @@ def main() -> int:
     args = ap.parse_args()
     logging.basicConfig(level=logging.WARNING, format="%(levelname)s %(message)s")
 
-    missing = [v for v in args.videos if not v.with_suffix(".csv").is_file()]
+    train = [v for v in args.videos if v.name.startswith("train_")]
+    if train:
+        # Video train_ đã (hoặc sẽ) đưa vào huấn luyện; chấm trên đó thì số đẹp giả.
+        print("Bỏ qua video huấn luyện, không dùng để chấm: " + ", ".join(v.name for v in train))
+    videos = [v for v in args.videos if v not in train]
+    answers: dict[Path, list] = {}
+    tables: dict[Path, dict] = {}
+    missing = []
+    for v in videos:
+        if v.with_suffix(".csv").is_file():
+            answers[v] = load_gt(v.with_suffix(".csv"))
+            continue
+        table_path = v.parent / "nhan.csv"
+        if table_path.is_file() and table_path not in tables:
+            tables[table_path] = load_gt_table(table_path)
+        if v.name in tables.get(table_path, {}):
+            answers[v] = tables[table_path][v.name]
+        else:
+            missing.append(v)
     if missing:
-        print("Thiếu tệp đáp án (.csv cùng tên) cho: " + ", ".join(map(str, missing)))
+        print("Thiếu đáp án (tệp .csv cùng tên, hoặc một dòng trong nhan.csv cùng thư mục) cho: "
+              + ", ".join(map(str, missing)))
+        return 1
+    if not videos:
+        print("Không còn video nào để chấm.")
         return 1
 
     out = args.out or Path("runs/eval") / time.strftime("%Y%m%d-%H%M%S")
@@ -108,8 +132,8 @@ def main() -> int:
     scores: dict[str, list[float]] = defaultdict(list)
     alert_rows, window_rows = [], []
     total_seconds = 0.0
-    for i, video in enumerate(args.videos):
-        gt = load_gt(video.with_suffix(".csv"))
+    for i, video in enumerate(videos):
+        gt = answers[video]
         skipped = sorted({e.label for e in gt if e.label not in MODULE_LABELS})
         gt = [e for e in gt if e.label in MODULE_LABELS]
         alerts, win, duration = run_video(video, f"v{i}", pipeline, args.fps, args.window)
@@ -128,7 +152,7 @@ def main() -> int:
         print(f"{video.name}: {duration:.1f}s, {len(gt)} khoảng vi phạm, {len(alerts)} sự cố báo{note}")
 
     hours = total_seconds / 3600
-    print(f"\nTổng {len(args.videos)} video, {total_seconds:.0f}s. Đoạn dài {args.window:g}s, "
+    print(f"\nTổng {len(videos)} video, {total_seconds:.0f}s. Đoạn dài {args.window:g}s, "
           f"dung sai báo muộn {args.tolerance:g}s.\n")
     header = ["nhan", "mo_hinh_co_lop", "khoang_vi_pham", "bao_dung", "bao_nham", "bo_sot", "bao_lap",
               "precision", "recall", "f1", "do_tre_trung_vi_s", "bao_nham_moi_gio",

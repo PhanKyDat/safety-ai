@@ -31,7 +31,17 @@ MA_CANH = (
     "binh_thuong", "khong_mu", "khong_ao", "nga", "vung_nguy_hiem",
     "bay_ao_cam", "bay_mu_luoi_trai", "bay_den_vang", "lua", "khoi",
 )
-TEN_HOP_LE = re.compile(rf"^({'|'.join(MA_CANH)})_\d{{2}}(_(ngay|dem))?\.(mp4|mov|mkv)$")
+# Tiền tố test_/train_ theo quy ước dữ liệu của nhóm (docs/ppe-week7-data-protocol.md):
+# test_ chỉ để đo, không bao giờ đưa vào huấn luyện; train_ để cắt khung gán nhãn.
+TEN_HOP_LE = re.compile(
+    rf"^(?:(test|train)_)?({'|'.join(MA_CANH)})_\d{{2,}}(?:_(ngay|dem))?\.(mp4|mov|mkv)$"
+)
+
+
+def ma_canh(ten: str) -> str | None:
+    """Mã cảnh của tệp, bỏ tiền tố test_/train_; None nếu tên sai quy ước."""
+    m = TEN_HOP_LE.match(ten)
+    return m.group(2) if m else None
 
 # Nhan su co theo docs/data-contract.md, de goi y khi dien nhan.csv
 NHAN_GOI_Y = {
@@ -104,7 +114,9 @@ def soi(path: Path) -> dict:
 
     loi, nhac = [], []
     if not TEN_HOP_LE.match(path.name):
-        loi.append("tên không đúng quy ước <ma_canh>_<so>_<ngay|dem>.mp4")
+        loi.append("tên không đúng quy ước <test|train>_<ma_canh>_<so>_<ngay|dem>.mp4")
+    elif not path.name.startswith(("test_", "train_")):
+        nhac.append("chưa có tiền tố test_ hoặc train_; coi như video để đo (test_)")
     if rong < RONG_TOI_THIEU or cao < CAO_TOI_THIEU:
         loi.append(f"{rong}x{cao} nhỏ hơn {RONG_TOI_THIEU}x{CAO_TOI_THIEU}")
     if dai < DAI_TOI_THIEU:
@@ -134,8 +146,7 @@ def tao_mau_nhan(thu_muc: Path, ket_qua: list[dict]) -> Path:
         w = csv.writer(f)
         w.writerow(["tep", "nhan", "bat_dau_giay", "ket_thuc_giay", "ghi_chu"])
         for r in ket_qua:
-            ma = r["tep"].split("_0")[0]
-            w.writerow([r["tep"], NHAN_GOI_Y.get(ma, ""), "", "", ""])
+            w.writerow([r["tep"], NHAN_GOI_Y.get(ma_canh(r["tep"]) or "", ""), "", "", ""])
     return dich
 
 
@@ -181,7 +192,7 @@ def main() -> int:
         dich = tao_mau_nhan(thu_muc, ket_qua)
         print(f"Khung mẫu nhãn: {dich} (mở bằng Excel, điền thời điểm sự cố)")
 
-    thieu = [m for m in MA_CANH if not any(r["tep"].startswith(m) for r in ket_qua)]
+    thieu = [m for m in MA_CANH if not any(ma_canh(r["tep"]) == m for r in ket_qua)]
     if thieu:
         print("Chưa có cảnh: " + ", ".join(thieu))
     return 0 if hong == 0 else 1

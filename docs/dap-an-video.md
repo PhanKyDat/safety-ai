@@ -1,7 +1,23 @@
 # Đáp án cho video kiểm thử
 
-Mỗi video kiểm thử cần một tệp đáp án để chấm module: tệp `.csv` **cùng tên** với video, để
-cạnh video. Ví dụ `test_khongmu_dat.mp4` đi kèm `test_khongmu_dat.csv`. Mẫu: [mau-dap-an.csv](mau-dap-an.csv).
+Video đặt tên theo [bo-video-kiem-thu.md](bo-video-kiem-thu.md): `test_<ma_canh>_<so>_<ngay|dem>.mp4`,
+để trong `data/videos_test/`. Video `train_*` không dùng để chấm (script tự bỏ qua).
+
+**Cách chính: một bảng `nhan.csv` cho cả thư mục.** `scripts/kiem_tra_video_test.py --nhan` tạo sẵn
+khung, mỗi video một dòng, gợi ý nhãn theo tên tệp; mình chỉ điền giờ. Một video có nhiều khoảng vi
+phạm thì thêm dòng; video không vi phạm thì để trống cột nhãn:
+
+```csv
+tep,nhan,bat_dau_giay,ket_thuc_giay,ghi_chu
+test_khong_mu_01_ngay.mp4,no_helmet,5,20,nguoi ao xanh
+test_khong_mu_01_ngay.mp4,no_helmet,0:30,0:41,quay lai
+test_binh_thuong_01_ngay.mp4,,,,
+```
+
+Khung mẫu đã gợi ý nhãn mà quên điền giờ thì script chấm báo lỗi, không chấm nhầm.
+
+**Cách phụ:** tệp `.csv` **cùng tên** với video, để cạnh video (mẫu: [mau-dap-an.csv](mau-dap-an.csv)),
+dùng khi chấm một video lẻ ngoài thư mục chung. Có cả hai thì tệp riêng được ưu tiên.
 
 ```csv
 nhan,bat_dau,ket_thuc,ghi_chu

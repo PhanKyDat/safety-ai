@@ -66,6 +66,39 @@ def load_gt(path: str | Path) -> list[GtEvent]:
     return events
 
 
+def load_gt_table(path: str | Path) -> dict[str, list[GtEvent]]:
+    """Đáp án chung cho cả thư mục (nhan.csv do scripts/kiem_tra_video_test.py tạo khung):
+
+        tep,nhan,bat_dau_giay,ket_thuc_giay,ghi_chu
+        test_khong_mu_01_ngay.mp4,no_helmet,5,20,
+
+    Video có trong bảng mà cột nhãn để trống là video không có vi phạm. Đã ghi nhãn mà
+    chưa điền thời gian thì báo lỗi, để khung mẫu chưa điền không bị chấm như đáp án thật.
+    """
+    known = {label.value for label in IncidentLabel}
+    table: dict[str, list[GtEvent]] = {}
+    with open(path, newline="", encoding="utf-8-sig") as f:
+        for line_no, row in enumerate(csv.DictReader(f), start=2):
+            video = (row.get("tep") or "").strip()
+            if not video:
+                continue
+            events = table.setdefault(video, [])
+            label = (row.get("nhan") or "").strip()
+            if not label:
+                continue
+            if label not in known:
+                raise ValueError(f"{path}:{line_no}: nhãn '{label}' không có trong {sorted(known)}")
+            start_s = (row.get("bat_dau_giay") or row.get("bat_dau") or "").strip()
+            end_s = (row.get("ket_thuc_giay") or row.get("ket_thuc") or "").strip()
+            if not start_s or not end_s:
+                raise ValueError(f"{path}:{line_no}: {video} có nhãn {label} nhưng chưa điền thời gian")
+            start, end = parse_time(start_s), parse_time(end_s)
+            if end <= start:
+                raise ValueError(f"{path}:{line_no}: ket_thuc phải sau bat_dau")
+            events.append(GtEvent(label, start, end, (row.get("ghi_chu") or "").strip()))
+    return table
+
+
 @dataclass
 class LabelScore:
     gt: int = 0

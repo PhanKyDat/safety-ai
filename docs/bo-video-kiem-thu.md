@@ -55,10 +55,16 @@ tình huống thật.
 ## 3. Đặt tên tệp
 
 ```
-<ma_canh>_<so_thu_tu>_<ngay|dem>.mp4      ví dụ: khong_mu_01_ngay.mp4
+<test|train>_<ma_canh>_<so_thu_tu>_<ngay|dem>.mp4      ví dụ: test_khong_mu_01_ngay.mp4
 ```
 
-Để hết trong `data/videos_test/`. Tên sai thì script kiểm tra sẽ báo.
+- `test_`: **chỉ để đo**, không bao giờ đưa vào huấn luyện (kể cả dò ngưỡng, chọn checkpoint).
+- `train_`: để bạn phụ trách dữ liệu cắt khung gán nhãn. Quay khác ngày/chỗ/quần áo với phần `test_`,
+  không thì mô hình học thuộc cảnh chấm điểm (xem [ppe-week7-data-protocol.md](ppe-week7-data-protocol.md)).
+- Tệp chưa có tiền tố (như các đoạn lửa/khói tải về) được coi là `test_`.
+
+Để hết trong `data/videos_test/`. Tên sai thì script kiểm tra sẽ báo. Đáp án thời điểm sự cố
+ghi vào `nhan.csv` cùng thư mục (`--nhan` tạo sẵn khung); `scripts/evaluate_videos.py` đọc thẳng tệp này.
 
 ## 4. Kiểm tra sau khi quay
 
