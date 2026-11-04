@@ -160,6 +160,9 @@ cách ghi đáp án xem [docs/dap-an-video.md](docs/dap-an-video.md):
 .venv\Scripts\python.exe scripts\evaluate_videos.py data\test_videos\*.mp4 --extra-model models\ppe_v1_finetune_best.pt
 ```
 
+Luật ngã và mô hình cháy còn được chấm trên bộ công khai có đáp án của tác giả (UR Fall, FIRESENSE):
+cách tải, lệnh chạy và kết quả xem [docs/du-lieu-cong-khai.md](docs/du-lieu-cong-khai.md).
+
 Chạy kiểm thử luật sự cố (không cần camera hay model):
 
 ```powershell

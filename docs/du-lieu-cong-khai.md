@@ -63,3 +63,29 @@ kho (người đi lại nghiêng tới 41°); cần video ngã quay góc cao c�
 
 Kết quả ghi ở `runs/eval/urfall-*`: `tong_hop.csv`, `tung_video.csv`, `tung_khung.csv` (góc thân,
 góc chân từng khung, dùng để quét ngưỡng không cần chạy lại mô hình).
+
+## Mô hình cháy trên FIRESENSE
+
+FIRESENSE chỉ chia video thành có (`pos/`) và không (`neg/`), không ghi lửa/khói xuất hiện từ
+giây nào. `scripts/prep_firesense.py` ghi video `pos/` là có vi phạm cả video rồi chấm bằng
+`scripts/evaluate_videos.py` như video của nhóm (mô hình `fire_v1_yolo26s`, luật 6/10 khung).
+Vì vậy F1 ở đây là **theo video**, còn AUROC/AUPRC theo đoạn hơi bi quan: vài giây đầu video `pos`
+có thể chưa thấy khói mà vẫn tính là "có".
+
+### Khói (04/11): 13 video có khói, 9 video dễ nhầm
+
+Video dễ nhầm gồm mây, cây lay, cờ bay, đường xe chạy, người đi lại, bãi lau sậy.
+
+| | Kết quả |
+|---|---|
+| Video có khói bắt được | **12/13**, độ trễ trung vị 1,0 s |
+| Video dễ nhầm báo khói nhầm | **0/9**: mây, cờ bay cũng không bị nhận là khói |
+| Precision / Recall / F1 | 100% / 92,3% / **96,0%** |
+| AUROC / AUPRC theo đoạn 2 s | 0,88 / 0,91 (ngẫu nhiên 0,65) |
+
+- Video sót duy nhất (`testpos05`) là **khói trong nhà kho**, camera giám sát 4,7 khung/giây có
+  chữ chồng lên hình: mô hình thấy khói (điểm cao nhất 0,39) nhưng không đủ 6/10 khung. Đây lại là
+  cảnh giống nhà xưởng nhất, nên cần thêm ảnh khói trong nhà khi train lại.
+- **Báo lửa nhầm 1 lần** trên video dễ nhầm: bãi lau sậy vàng (`testneg05`), mô hình khoanh **cả
+  khung hình** là lửa (điểm 0,38–0,49). Hai lần báo lửa còn lại trong video khói đã xem ảnh: đều có
+  lửa thật (cửa sổ tòa nhà đang cháy, đống lửa trên cỏ), không tính là nhầm.
