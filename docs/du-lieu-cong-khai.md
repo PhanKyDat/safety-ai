@@ -89,3 +89,35 @@ Video dễ nhầm gồm mây, cây lay, cờ bay, đường xe chạy, người 
 - **Báo lửa nhầm 1 lần** trên video dễ nhầm: bãi lau sậy vàng (`testneg05`), mô hình khoanh **cả
   khung hình** là lửa (điểm 0,38–0,49). Hai lần báo lửa còn lại trong video khói đã xem ảnh: đều có
   lửa thật (cửa sổ tòa nhà đang cháy, đống lửa trên cỏ), không tính là nhầm.
+
+### Lửa (04/11): 11 video có lửa, 16 video dễ nhầm
+
+Video dễ nhầm gồm xe đỏ, người mặc áo cam/đỏ, vách đá nâu đỏ, đường phố ban đêm có đèn xe, đèn
+lóa nhòe (bokeh), sân chơi nhiều màu. Video có lửa gồm cháy rừng, lửa bếp, lò sưởi, đống lửa.
+
+| | Kết quả |
+|---|---|
+| Video có lửa bắt được | **10/11**, độ trễ trung vị 1,0 s |
+| Video dễ nhầm báo lửa nhầm | **3/16** (4 lần báo) |
+| Precision / Recall / F1 | 71,4% / 90,9% / **80,0%** |
+| AUROC / AUPRC theo đoạn 2 s | 0,89 / 0,88 (ngẫu nhiên 0,37) |
+
+- **Báo nhầm đều do ánh đèn**, đã xem ảnh lúc báo: đèn pha ô tô ban đêm bị lóa (điểm 0,42), đèn
+  lóa nhòe ngoài tiêu cự (0,24), đèn giao thông/đèn xe ở góc phố (0,20). Cùng kiểu lỗi với đèn trần
+  trong nhà đã thấy trên video tự quay. Xe đỏ, áo cam, vách đá đỏ thì **không** bị nhầm.
+- **Video sót** (`posVideo7`): đống lửa nhỏ dưới đất, ở xa, camera giám sát 10 khung/giây.
+- Báo khói 3 lần trong video có lửa (cháy rừng có khói đen...) không tính là nhầm vì đáp án bộ lửa
+  chỉ ghi lửa.
+
+### Tóm tắt cho báo cáo
+
+| Thành phần | Bộ công khai | F1 | AUROC | AUPRC (ngẫu nhiên) |
+|---|---|---|---|---|
+| Luật ngã (theo video, giữ khung cuối 4 s) | UR Fall, 70 video | 40,0% | – | – |
+| Luật ngã (theo khung, khung thấy người) | UR Fall | – | 0,81 | 0,76 (0,17) |
+| Mô hình + luật khói | FIRESENSE, 22 video | 96,0% | 0,88 | 0,91 (0,65) |
+| Mô hình + luật lửa | FIRESENSE, 27 video | 80,0% | 0,89 | 0,88 (0,37) |
+
+Ba việc rút ra: (1) luật ngã cần video góc cao của nhóm trước khi chỉnh ngưỡng; (2) mô hình cháy
+cần thêm ảnh nền có đèn (đèn pha, đèn trần, đèn lóa), cỏ khô, lau sậy; (3) cần thêm ảnh khói
+trong nhà và lửa nhỏ ở xa. Hai việc sau thuộc phần train lại mô hình.
