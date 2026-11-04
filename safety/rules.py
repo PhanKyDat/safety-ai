@@ -39,6 +39,14 @@ class PPEConfig:
     infer_missing: bool = False
     kp_conf: float = 0.5
     head_points: int = 2    # số điểm mặt/tai (mũi, 2 mắt, 2 tai) phải thấy rõ
+    # Chống báo trùng khi đổi mã người: mã định danh sống trung vị chỉ 5,1 s (đo tuần 3),
+    # người khuất sau kệ rồi hiện lại thường mang mã mới và bị báo lần nữa. Sự cố mới được
+    # coi là của người vừa báo nếu mã cũ đã mất không quá `reentry_window` giây và người mới
+    # hiện ngay gần chỗ cũ (tâm hộp cách không quá `reentry_distance` lần cạnh dài hộp cũ,
+    # thường là chiều cao người: đủ cho đi khuất sau kệ rồi ló ra phía bên kia).
+    # Cố ý hẹp: không nhận diện lại được người, gộp rộng hơn thì người khác đi vào sẽ bị sót.
+    reentry_window: float = 10.0
+    reentry_distance: float = 1.0
 
 
 # Mũ xét trong vùng đầu; áo phản quang xét trên cả khung người.
@@ -68,12 +76,30 @@ class _Streak:
 
 
 @dataclass
+class _Alerted:
+    """Một người vừa bị báo: để nhận ra khi người đó hiện lại dưới mã mới."""
+
+    track_id: int
+    label: IncidentLabel
+    alert_ts: float
+    last_seen: float
+    box: BBox
+
+
+def _near(a: BBox, b: BBox, factor: float) -> bool:
+    ax, ay = (a.x1 + a.x2) / 2, (a.y1 + a.y2) / 2
+    bx, by = (b.x1 + b.x2) / 2, (b.y1 + b.y2) / 2
+    return math.hypot(ax - bx, ay - by) <= factor * max(a.width, a.height)
+
+
+@dataclass
 class PPERule:
     """Một đối tượng cho mỗi camera: trạng thái đếm giờ gắn với track_id của camera đó."""
 
     camera: str
     config: PPEConfig = field(default_factory=PPEConfig)
     _streaks: dict[tuple[int, IncidentLabel], _Streak] = field(default_factory=dict, init=False)
+    _alerted: list[_Alerted] = field(default_factory=list, init=False)
 
     def streak_of(self, track_id: int, label: IncidentLabel) -> _Streak | None:
         """Trạng thái đồng hồ đếm của một người, để hiển thị hoặc gỡ lỗi."""
@@ -81,16 +107,34 @@ class PPERule:
 
     def update(self, frame: FrameResult) -> list[Incident]:
         incidents: list[Incident] = []
-        for person in frame.detections:
-            if person.cls is not DetectClass.PERSON or person.track_id is None:
-                continue
+        people = [d for d in frame.detections if d.cls is DetectClass.PERSON and d.track_id is not None]
+        visible = {p.track_id for p in people}
+        for p in people:
+            for a in self._alerted:
+                if a.track_id == p.track_id:
+                    a.last_seen, a.box = frame.ts, p.bbox
+        for person in people:
             for label, ok_cls, bad_cls, head_only in _CHECKS:
                 violating = self._violating(person, frame, ok_cls, bad_cls, head_only)
-                incident = self._advance(person.track_id, label, frame.ts, violating)
+                incident = self._advance(person, label, frame.ts, violating, visible)
                 if incident is not None:
                     incidents.append(incident)
         self._prune(frame.ts)
         return incidents
+
+    def _same_as_alerted(self, person: Detection, label: IncidentLabel, ts: float,
+                         visible: set[int]) -> _Alerted | None:
+        """Người vừa bị báo, mất mã chưa lâu và hiện lại ngay gần chỗ cũ."""
+        cfg = self.config
+        if cfg.reentry_window <= 0:
+            return None
+        for a in self._alerted:
+            if (a.label is label and a.track_id not in visible
+                    and ts - a.last_seen <= cfg.reentry_window
+                    and ts - a.alert_ts < cfg.cooldown
+                    and _near(a.box, person.bbox, cfg.reentry_distance)):
+                return a
+        return None
 
     def _violating(
         self,
@@ -134,8 +178,10 @@ class PPERule:
         return all(k[i].conf >= c for i in (5, 6, 11, 12))
 
     def _advance(
-        self, track_id: int, label: IncidentLabel, ts: float, violating
+        self, person: Detection, label: IncidentLabel, ts: float, violating,
+        visible: set[int] = frozenset(),
     ) -> Incident | None:
+        track_id = person.track_id
         key = (track_id, label)
         if violating is False:
             self._streaks.pop(key, None)
@@ -153,7 +199,14 @@ class PPERule:
             return None
         if streak.last_alert is not None and ts - streak.last_alert < self.config.cooldown:
             return None
+        earlier = self._same_as_alerted(person, label, ts, visible)
+        if earlier is not None:
+            # Cùng người, mã mới: nhận lại thời điểm báo cũ để cooldown chạy tiếp như một người.
+            streak.last_alert = earlier.alert_ts
+            earlier.track_id, earlier.last_seen, earlier.box = track_id, ts, person.bbox
+            return None
         streak.last_alert = ts
+        self._alerted.append(_Alerted(track_id, label, ts, ts, person.bbox))
         return Incident(
             camera=self.camera,
             label=label,
@@ -169,6 +222,7 @@ class PPERule:
         for key, streak in list(self._streaks.items()):
             if streak.last_hit is not None and ts - streak.last_hit > limit:
                 del self._streaks[key]
+        self._alerted = [a for a in self._alerted if ts - a.alert_ts < self.config.cooldown]
 
 
 @dataclass(frozen=True)

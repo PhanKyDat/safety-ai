@@ -171,3 +171,40 @@ def test_vang_mat_can_mo_hinh_tu_the():
     """Mô hình không có điểm khớp thì không biết người có được thấy rõ không, nên không suy ra."""
     rule = PPERule("xuong_han", VANG_MAT)
     assert run(rule, [frame(t / 5, person()) for t in range(30)]) == []
+
+
+# --- Chống báo trùng khi đổi mã người ---
+
+def person_at(track_id: int, dx: float = 0.0) -> Detection:
+    return Detection(DetectClass.PERSON, BBox(100 + dx, 100, 200 + dx, 400), 0.9, track_id=track_id)
+
+
+def violating_frames(track_id: int, t0: float, seconds: float, dx: float = 0.0):
+    return [frame(t0 + t / 5, person_at(track_id, dx), at(DetectClass.NO_HELMET, BBox(110 + dx, 110, 190 + dx, 160)))
+            for t in range(int(seconds * 5))]
+
+
+def test_doi_ma_ngay_cho_cu_thi_khong_bao_lai():
+    """Khuất sau kệ 1 giây rồi hiện lại cùng chỗ với mã mới: vẫn là một người, một sự cố."""
+    rule = PPERule("xuong_han")
+    frames = violating_frames(1, 0.0, 5) + violating_frames(2, 6.0, 6)
+    assert [i.track_id for i in run(rule, frames)] == [1]
+
+
+def test_nguoi_khac_o_cho_khac_van_bi_bao():
+    """Không nhận diện lại được người, nên chỉ gộp khi hiện lại gần chỗ cũ."""
+    rule = PPERule("xuong_han")
+    frames = violating_frames(1, 0.0, 5) + violating_frames(2, 6.0, 6, dx=400)
+    assert [i.track_id for i in run(rule, frames)] == [1, 2]
+
+
+def test_mat_ma_lau_hon_cua_so_thi_tinh_nguoi_moi():
+    rule = PPERule("xuong_han", PPEConfig(reentry_window=10.0))
+    frames = violating_frames(1, 0.0, 5) + violating_frames(2, 20.0, 6)
+    assert [i.track_id for i in run(rule, frames)] == [1, 2]
+
+
+def test_tat_chong_trung_thi_bao_theo_tung_ma():
+    rule = PPERule("xuong_han", PPEConfig(reentry_window=0))
+    frames = violating_frames(1, 0.0, 5) + violating_frames(2, 6.0, 6)
+    assert [i.track_id for i in run(rule, frames)] == [1, 2]
