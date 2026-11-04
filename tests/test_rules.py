@@ -3,7 +3,7 @@
     .venv\\Scripts\\python.exe -m pytest tests -q
 """
 
-from safety.contracts import BBox, Detection, DetectClass, FrameResult, IncidentLabel
+from safety.contracts import BBox, Detection, DetectClass, FrameResult, IncidentLabel, Keypoint
 from safety.rules import PPEConfig, PPERule
 
 PERSON = BBox(100, 100, 200, 400)
@@ -125,3 +125,49 @@ def test_khong_co_track_id_thi_bo_qua():
     no_id = Detection(DetectClass.PERSON, PERSON, 0.9)
     frames = [frame(t / 5, no_id, at(DetectClass.NO_HELMET, HEAD)) for t in range(21)]
     assert run(rule, frames) == []
+
+
+# --- Cách "vắng mặt": suy ra thiếu mũ/áo khi thấy rõ người mà không thấy đồ bảo hộ ---
+
+def kp_person(head_conf: float = 0.9, body_conf: float = 0.9, track_id: int = 1) -> Detection:
+    """17 điểm khớp COCO: 0–4 mặt/tai, 5–6 vai, 11–12 hông."""
+    kps = [Keypoint(150, 120, head_conf)] * 5 + [Keypoint(150, 200, body_conf)] * 12
+    return Detection(DetectClass.PERSON, PERSON, 0.9, track_id=track_id, keypoints=tuple(kps))
+
+
+VANG_MAT = PPEConfig(infer_missing=True)
+
+
+def test_mac_dinh_van_cach_cu_khong_thay_lop_vi_pham_thi_khong_bao():
+    rule = PPERule("xuong_han")
+    assert run(rule, [frame(t / 5, kp_person()) for t in range(30)]) == []
+
+
+def test_vang_mat_thay_ro_dau_ma_khong_co_mu_thi_bao_thieu_mu():
+    rule = PPERule("xuong_han", VANG_MAT)
+    labels = {i.label for i in run(rule, [frame(t / 5, kp_person(), at(DetectClass.VEST, BODY)) for t in range(21)])}
+    assert labels == {IncidentLabel.NO_HELMET}
+
+
+def test_vang_mat_co_mu_va_ao_thi_im_lang():
+    rule = PPERule("xuong_han", VANG_MAT)
+    frames = [frame(t / 5, kp_person(), at(DetectClass.HELMET, HEAD), at(DetectClass.VEST, BODY)) for t in range(30)]
+    assert run(rule, frames) == []
+
+
+def test_vang_mat_khong_thay_ro_nguoi_thi_khong_ket_luan():
+    """Quay lưng, bị che: điểm mặt/vai mờ thì không được coi là vi phạm."""
+    rule = PPERule("xuong_han", VANG_MAT)
+    assert run(rule, [frame(t / 5, kp_person(head_conf=0.2, body_conf=0.2)) for t in range(30)]) == []
+
+
+def test_vang_mat_thay_ro_than_ma_khong_co_ao_thi_bao_thieu_ao():
+    rule = PPERule("xuong_han", VANG_MAT)
+    labels = {i.label for i in run(rule, [frame(t / 5, kp_person(), at(DetectClass.HELMET, HEAD)) for t in range(21)])}
+    assert labels == {IncidentLabel.NO_VEST}
+
+
+def test_vang_mat_can_mo_hinh_tu_the():
+    """Mô hình không có điểm khớp thì không biết người có được thấy rõ không, nên không suy ra."""
+    rule = PPERule("xuong_han", VANG_MAT)
+    assert run(rule, [frame(t / 5, person()) for t in range(30)]) == []

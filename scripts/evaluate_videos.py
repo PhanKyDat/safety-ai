@@ -43,6 +43,7 @@ from safety.evaluation import (
 )
 from safety.incidents import IncidentProcessor
 from safety.pipeline import SafetyPipeline
+from safety.rules import PPEConfig
 
 MODULE_LABELS = ("no_helmet", "no_vest", "fire", "smoke", "fall")
 
@@ -53,8 +54,9 @@ def fmt(x: float | None, pct: bool = True) -> str:
     return f"{100 * x:.1f}%" if pct else f"{x:.3f}"
 
 
-def run_video(path: Path, cam: str, pipeline: SafetyPipeline, fps: float, window: float):
-    processor = IncidentProcessor(cam, publisher=None, snapshot_dir=None)
+def run_video(path: Path, cam: str, pipeline: SafetyPipeline, fps: float, window: float,
+              ppe: PPEConfig | None = None):
+    processor = IncidentProcessor(cam, publisher=None, snapshot_dir=None, ppe=ppe)
     cap = cv2.VideoCapture(str(path))
     src_fps = cap.get(cv2.CAP_PROP_FPS) or 25.0
     step = max(1, round(src_fps / fps))
@@ -86,6 +88,8 @@ def main() -> int:
     ap.add_argument("--device", default="0")
     ap.add_argument("--fps", type=float, default=5.0)
     ap.add_argument("--window", type=float, default=2.0, help="độ dài một đoạn khi tính AUROC/AUPRC (giây)")
+    ap.add_argument("--vang-mat", action="store_true",
+                    help="chấm luật đồ bảo hộ theo cách vắng mặt (xem PPEConfig.infer_missing)")
     ap.add_argument("--tolerance", type=float, default=5.0,
                     help="sự cố tới muộn tối đa bấy nhiêu giây sau khi hết khoảng vi phạm vẫn tính là đúng")
     ap.add_argument("--out", type=Path, default=None, help="thư mục ghi kết quả (mặc định runs/eval/<thời điểm>)")
@@ -136,7 +140,8 @@ def main() -> int:
         gt = answers[video]
         skipped = sorted({e.label for e in gt if e.label not in MODULE_LABELS})
         gt = [e for e in gt if e.label in MODULE_LABELS]
-        alerts, win, duration = run_video(video, f"v{i}", pipeline, args.fps, args.window)
+        alerts, win, duration = run_video(video, f"v{i}", pipeline, args.fps, args.window,
+                                          PPEConfig(infer_missing=args.vang_mat))
         total_seconds += duration
         for label, s in match_events(gt, alerts, args.tolerance).items():
             totals[label].add(s)

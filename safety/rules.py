@@ -31,6 +31,14 @@ class PPEConfig:
     cooldown: float = 60.0
     head_ratio: float = 0.25
     min_inside: float = 0.5
+    # Cách "vắng mặt": thấy rõ đầu (thân) mà không có mũ (áo) thì coi là vi phạm, không
+    # chờ mô hình nói "không mũ". Đo 04/11 trên 7 đoạn tự quay góc cao: mô hình PPE nhận
+    # được mũ và áo thật ở ~3/4 số khung nhưng chưa ra no_helmet/no_vest lần nào, nên
+    # luật kiểu cũ bắt 0/6 vi phạm; cách vắng mặt bắt 6/6, 0 báo nhầm (mẫu nhỏ).
+    # Giới hạn: mũ thường bị nhận là mũ bảo hộ (mũ lưỡi trai trên video kho) thì vẫn sót.
+    infer_missing: bool = False
+    kp_conf: float = 0.5
+    head_points: int = 2    # số điểm mặt/tai (mũi, 2 mắt, 2 tai) phải thấy rõ
 
 
 # Mũ xét trong vùng đầu; áo phản quang xét trên cả khung người.
@@ -96,6 +104,9 @@ class PPERule:
 
         Không kết luận được thì giữ nguyên đồng hồ đếm: người bị che khuất một lúc
         không phải là bằng chứng có mũ, mà cũng không nên tính là vi phạm.
+
+        Bật `infer_missing` thì khi không thấy lớp nào, người được thấy rõ (theo điểm
+        khớp của mô hình tư thế) cũng tính là vi phạm, trả về chính detection người.
         """
         region = head_region(person.bbox, self.config.head_ratio) if head_only else person.bbox
         bad = None
@@ -108,7 +119,19 @@ class PPERule:
                 return False
             if bad is None or d.conf > bad.conf:
                 bad = d
+        if bad is None and self.config.infer_missing and self._clearly_visible(person, head_only):
+            return person
         return bad
+
+    def _clearly_visible(self, person: Detection, head_only: bool) -> bool:
+        """Thấy rõ đầu (đủ điểm mặt/tai) hoặc thân (2 vai + 2 hông). Không có điểm khớp thì không."""
+        k = person.keypoints
+        if not k or len(k) < 13:
+            return False
+        c = self.config.kp_conf
+        if head_only:
+            return sum(1 for p in k[:5] if p.conf >= c) >= self.config.head_points
+        return all(k[i].conf >= c for i in (5, 6, 11, 12))
 
     def _advance(
         self, track_id: int, label: IncidentLabel, ts: float, violating

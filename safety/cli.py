@@ -23,6 +23,7 @@ from safety.db import DEFAULT_DB
 from safety.incidents import IncidentProcessor
 from safety.outputs import build_outputs
 from safety.pipeline import SafetyPipeline
+from safety.rules import PPEConfig
 from safety.stream import DEFAULT_FPS, MultiSource
 
 log = logging.getLogger("safety.cli")
@@ -62,6 +63,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--device", default="0", help="0 = GPU đầu tiên, cpu = chạy CPU")
     p.add_argument("--fps", type=float, default=DEFAULT_FPS)
     p.add_argument("--conf", type=float, default=0.25)
+    p.add_argument("--vang-mat", action="store_true",
+                   help="Luật đồ bảo hộ suy ra thiếu mũ/áo khi thấy rõ người mà không thấy đồ bảo hộ "
+                        "(cần mô hình tư thế), không chờ mô hình nói no_helmet/no_vest")
     p.add_argument("--max-frames", type=int, default=0, help="Số lượt (mỗi lượt một khung mỗi camera), 0 = chạy mãi")
     p.add_argument("--json", action="store_true", help="In FrameResult dạng JSON mỗi dòng")
     p.add_argument("--show", action="store_true", help="Mở cửa sổ xem trực tiếp, nhấn Q để dừng sớm")
@@ -120,7 +124,8 @@ def main(argv: list[str] | None = None) -> int:
     source = MultiSource(cams, target_fps=args.fps)
     outputs = build_outputs(args.frigate, list(cams), telegram=args.telegram,
                             db_path=db_path(args.db))
-    processors = {cam: IncidentProcessor(cam, publisher=outputs, snapshot_dir=args.snapshots)
+    ppe = PPEConfig(infer_missing=args.vang_mat)
+    processors = {cam: IncidentProcessor(cam, publisher=outputs, snapshot_dir=args.snapshots, ppe=ppe)
                   for cam in cams}
     log.info("Chạy %d camera: %s", len(cams), ", ".join(f"{c}={u}" for c, u in cams.items()))
 
