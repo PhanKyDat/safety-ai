@@ -21,7 +21,7 @@ import time
 from safety.contracts import FrameResult
 from safety.db import DEFAULT_DB
 from safety.incidents import IncidentProcessor
-from safety.outputs import build_outputs
+from safety.outputs import at_most, build_outputs
 from safety.pipeline import SafetyPipeline
 from safety.rules import PPEConfig
 from safety.stream import DEFAULT_FPS, MultiSource
@@ -74,6 +74,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--snapshots", default="snapshots", help="Thư mục lưu ảnh sự cố")
     p.add_argument("--telegram", action="store_true",
                    help="Gửi sự cố vào nhóm Telegram chung (TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID trong .env)")
+    p.add_argument("--telegram-toi-da", type=int, default=0, metavar="N", dest="telegram_max",
+                   help="Chỉ gửi Telegram N sự cố đầu tiên (0 = không giới hạn). Dùng khi chạy thử hoặc "
+                        "chạy dài trên video phát lặp, để không làm ngập nhóm; Frigate và DB vẫn nhận đủ")
     p.add_argument("--db", nargs="?", const="", default=None, metavar="PATH",
                    help=f"Ghi sự cố vào bảng incidents. Bỏ trống PATH = INCIDENT_DB trong .env, "
                         f"không có thì {DEFAULT_DB} (cùng tệp cầu nối MQTT ghi)")
@@ -123,6 +126,7 @@ def main(argv: list[str] | None = None) -> int:
                     "(dùng --model yolo26n-pose.pt)", args.model)
     source = MultiSource(cams, target_fps=args.fps)
     outputs = build_outputs(args.frigate, list(cams), telegram=args.telegram,
+                            telegram_when=at_most(args.telegram_max) if args.telegram_max > 0 else None,
                             db_path=db_path(args.db))
     ppe = PPEConfig(infer_missing=args.vang_mat)
     processors = {cam: IncidentProcessor(cam, publisher=outputs, snapshot_dir=args.snapshots, ppe=ppe)

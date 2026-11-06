@@ -9,7 +9,7 @@ import time
 from safety.alerts import TelegramPublisher, notifier_from_env
 from safety.contracts import Incident, IncidentLabel, Severity
 from safety.frigate import FrigatePublisher
-from safety.outputs import Outputs
+from safety.outputs import Outputs, at_most
 
 
 def incident(label=IncidentLabel.NO_HELMET, severity=Severity.HIGH, track_id=7) -> Incident:
@@ -99,6 +99,16 @@ def test_loc_su_co_truoc_khi_gui_telegram():
     out.close()
     assert [t for t, _ in n.sent] == [2]
     assert out.frigate.sent == 2            # Frigate vẫn nhận đủ, chỉ Telegram được lọc
+
+
+def test_gioi_han_so_tin_telegram_frigate_van_du():
+    n = FakeNotifier()
+    out = outputs(FakeClient(), n, when=at_most(2))
+    for i in range(5):
+        out.submit(incident(track_id=i))
+    out.close()
+    assert [t for t, _ in n.sent] == [0, 1]
+    assert out.frigate.sent == 5
 
 
 def test_khong_cau_hinh_gi_thi_khong_gui_dau_ca():

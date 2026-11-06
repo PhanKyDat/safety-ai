@@ -70,6 +70,18 @@ class Outputs:
         return "; ".join(parts) if parts else "không gửi đi đâu"
 
 
+def at_most(n: int) -> Callable[[Incident], bool]:
+    """Chỉ cho n sự cố đầu tiên đi Telegram, để chạy thử không làm ngập nhóm chung."""
+    count = 0
+
+    def allow(_incident: Incident) -> bool:
+        nonlocal count
+        count += 1
+        return count <= n
+
+    return allow
+
+
 def build_outputs(
     frigate_api: str | None,
     camera: str | Sequence[str],

@@ -41,7 +41,7 @@ from safety.cli import _rate, camera_sources
 from safety.contracts import Detection, DetectClass, FrameResult, Incident
 from safety.frigate import FrigateClient
 from safety.incidents import IncidentProcessor
-from safety.outputs import build_outputs
+from safety.outputs import at_most, build_outputs
 from safety.pipeline import SafetyPipeline
 from safety.stream import MultiSource
 
@@ -73,18 +73,6 @@ class MarkSimulated:
         if self.active:
             incident.sub_label = f"GIẢ LẬP - {incident.sub_label or ''}".rstrip(" -")
         return self.outputs.submit(incident)
-
-
-def at_most(n: int):
-    """Chỉ cho n sự cố đầu tiên đi Telegram, để chạy thử không làm ngập nhóm chung."""
-    count = 0
-
-    def allow(_incident: Incident) -> bool:
-        nonlocal count
-        count += 1
-        return count <= n
-
-    return allow
 
 
 def verify(api: str, incidents: list[Incident]) -> int:
