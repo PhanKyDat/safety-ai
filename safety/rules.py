@@ -39,10 +39,14 @@ class PPEConfig:
     infer_missing: bool = False
     kp_conf: float = 0.5
     head_points: int = 2    # số điểm mặt/tai (mũi, 2 mắt, 2 tai) phải thấy rõ
-    # "Thấy rõ người" còn đòi chính khung người đủ chắc: chạy thử demo 06/11, mô hình tư thế
-    # khoanh cái xô nước thành người (điểm 0,26, vẫn có điểm khớp vùng đầu) và luật báo
-    # "không mũ". Người thật trên video tự quay thường 0,7–0,9.
-    person_conf: float = 0.5
+    # Suy ra thiếu mũ còn đòi thấy rõ 2 vai và khung người đủ chắc. Chạy thử demo 06/11, mô
+    # hình tư thế khoanh cái xô nước thành người (điểm 0,25–0,44) có điểm mặt ở 22/31 lần, đủ
+    # 2 vai 3/31 lần, và luật báo "không mũ" hai lần (một lần lọt qua khi chỉ đòi vai). Người
+    # thật ở đoạn không mũ: điểm ≥ 0,5 ở 47/50 lần, có mặt + 2 vai 36/50.
+    # Thiếu áo không lọc theo điểm người: người đi sát cửa bị che chỉ còn 0,4–0,7 mà vẫn thấy
+    # rõ vai, hông; còn cái xô không bao giờ có hông nên không dính trường hợp này.
+    head_needs_shoulders: bool = True
+    head_person_conf: float = 0.5
     # Chống báo trùng khi đổi mã người: mã định danh sống trung vị chỉ 5,1 s (đo tuần 3),
     # người khuất sau kệ rồi hiện lại thường mang mã mới và bị báo lần nữa. Sự cố mới được
     # coi là của người vừa báo nếu mã cũ đã mất không quá `reentry_window` giây và người mới
@@ -174,10 +178,14 @@ class PPERule:
     def _clearly_visible(self, person: Detection, head_only: bool) -> bool:
         """Thấy rõ đầu (đủ điểm mặt/tai) hoặc thân (2 vai + 2 hông). Không có điểm khớp thì không."""
         k = person.keypoints
-        if not k or len(k) < 13 or person.conf < self.config.person_conf:
+        if not k or len(k) < 13:
             return False
         c = self.config.kp_conf
         if head_only:
+            if person.conf < self.config.head_person_conf:
+                return False
+            if self.config.head_needs_shoulders and not (k[5].conf >= c and k[6].conf >= c):
+                return False
             return sum(1 for p in k[:5] if p.conf >= c) >= self.config.head_points
         return all(k[i].conf >= c for i in (5, 6, 11, 12))
 
