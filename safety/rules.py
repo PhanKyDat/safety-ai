@@ -39,6 +39,10 @@ class PPEConfig:
     infer_missing: bool = False
     kp_conf: float = 0.5
     head_points: int = 2    # số điểm mặt/tai (mũi, 2 mắt, 2 tai) phải thấy rõ
+    # "Thấy rõ người" còn đòi chính khung người đủ chắc: chạy thử demo 06/11, mô hình tư thế
+    # khoanh cái xô nước thành người (điểm 0,26, vẫn có điểm khớp vùng đầu) và luật báo
+    # "không mũ". Người thật trên video tự quay thường 0,7–0,9.
+    person_conf: float = 0.5
     # Chống báo trùng khi đổi mã người: mã định danh sống trung vị chỉ 5,1 s (đo tuần 3),
     # người khuất sau kệ rồi hiện lại thường mang mã mới và bị báo lần nữa. Sự cố mới được
     # coi là của người vừa báo nếu mã cũ đã mất không quá `reentry_window` giây và người mới
@@ -170,7 +174,7 @@ class PPERule:
     def _clearly_visible(self, person: Detection, head_only: bool) -> bool:
         """Thấy rõ đầu (đủ điểm mặt/tai) hoặc thân (2 vai + 2 hông). Không có điểm khớp thì không."""
         k = person.keypoints
-        if not k or len(k) < 13:
+        if not k or len(k) < 13 or person.conf < self.config.person_conf:
             return False
         c = self.config.kp_conf
         if head_only:

@@ -129,10 +129,11 @@ def test_khong_co_track_id_thi_bo_qua():
 
 # --- Cách "vắng mặt": suy ra thiếu mũ/áo khi thấy rõ người mà không thấy đồ bảo hộ ---
 
-def kp_person(head_conf: float = 0.9, body_conf: float = 0.9, track_id: int = 1) -> Detection:
+def kp_person(head_conf: float = 0.9, body_conf: float = 0.9, track_id: int = 1,
+              conf: float = 0.9) -> Detection:
     """17 điểm khớp COCO: 0–4 mặt/tai, 5–6 vai, 11–12 hông."""
     kps = [Keypoint(150, 120, head_conf)] * 5 + [Keypoint(150, 200, body_conf)] * 12
-    return Detection(DetectClass.PERSON, PERSON, 0.9, track_id=track_id, keypoints=tuple(kps))
+    return Detection(DetectClass.PERSON, PERSON, conf, track_id=track_id, keypoints=tuple(kps))
 
 
 VANG_MAT = PPEConfig(infer_missing=True)
@@ -165,6 +166,12 @@ def test_vang_mat_thay_ro_than_ma_khong_co_ao_thi_bao_thieu_ao():
     rule = PPERule("xuong_han", VANG_MAT)
     labels = {i.label for i in run(rule, [frame(t / 5, kp_person(), at(DetectClass.HELMET, HEAD)) for t in range(21)])}
     assert labels == {IncidentLabel.NO_VEST}
+
+
+def test_vang_mat_khung_nguoi_khong_chac_thi_khong_suy_ra():
+    """Chạy thử demo 06/11: cái xô nước bị nhận là người 0,26 kèm điểm khớp vùng đầu."""
+    rule = PPERule("xuong_han", VANG_MAT)
+    assert run(rule, [frame(t / 5, kp_person(conf=0.26)) for t in range(30)]) == []
 
 
 def test_vang_mat_can_mo_hinh_tu_the():
