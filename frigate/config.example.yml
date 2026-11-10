@@ -45,6 +45,11 @@ go2rtc:
     # xuong_han: rtsp://192.168.1.50:8080/h264_ulaw.sdp
     # xuong_han_sub: rtsp://192.168.1.50:8080/h264_ulaw.sdp
 
+    # --- Điện thoại làm camera IP (tuần 9, đã chạy với iPhone): app Larix Broadcaster đẩy
+    # RTMP lên MediaMTX trên laptop (camera/mediamtx-dien-thoai.yml, docs/frigate-setup.md).
+    # Mở dòng dưới và khối camera dien_thoai ở cuối file.
+    # dien_thoai: rtsp://host.docker.internal:8555/live/dien_thoai
+
 # Ghi hình. Hình người lao động là dữ liệu cá nhân (Luật BVDLCN, hiệu lực 01/01/2026):
 # giữ ngắn nhất đủ dùng, và ghi rõ các con số này trong báo cáo.
 record:
@@ -121,3 +126,19 @@ cameras:
         # Người ở trong vùng nguy hiểm → Alert (module nghe frigate/reviews, lọc
         # severity=alert). Người ở chỗ khác chỉ là Detection, không báo Telegram.
         required_zones: [vung_nguy_hiem]
+
+  # Điện thoại làm camera IP (tuần 9): 1 luồng 720p cho cả ghi hình lẫn detect, Frigate thu
+  # nhỏ xuống 640x360 để detect. Module đọc rtsp://127.0.0.1:8554/dien_thoai.
+  # dien_thoai:
+  #   ffmpeg:
+  #     inputs:
+  #       - path: rtsp://127.0.0.1:8554/dien_thoai
+  #         input_args: preset-rtsp-restream
+  #         roles: [record, detect]
+  #   detect:
+  #     enabled: true
+  #     fps: 5
+  #     width: 640
+  #     height: 360
+  #   objects:
+  #     track: [person]

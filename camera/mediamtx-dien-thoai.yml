@@ -1,0 +1,24 @@
+# Nhận hình từ điện thoại làm camera IP (tuần 9: không có camera IP thật thì dùng điện thoại,
+# đúng mục "Rủi ro" của kế hoạch). Điện thoại đẩy RTMP lên laptop bằng app Larix Broadcaster
+# (iPhone/Android), Frigate và module đọc lại bằng RTSP:
+#
+#   mediamtx camera\mediamtx-dien-thoai.yml
+#   Larix: rtmp://<IP laptop>:1935/live/dien_thoai (Larix bắt URL có dạng app/stream)
+#   Frigate (trong Docker): rtsp://host.docker.internal:8555/live/dien_thoai
+#   Module trên laptop:     rtsp://127.0.0.1:8555/live/dien_thoai
+#
+# Cổng RTSP 8555 để không đụng 8554 của Frigate. Không có mật khẩu: chỉ bật trong mạng
+# Wi-Fi tin cậy (nhà, phòng lab), tắt (Ctrl+C) khi không dùng.
+
+logLevel: info
+
+rtspAddress: :8555
+rtspTransports: [tcp]
+rtmp: yes
+rtmpAddress: :1935
+hls: no
+webrtc: no
+srt: no
+
+paths:
+  live/dien_thoai: {}

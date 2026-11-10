@@ -305,6 +305,35 @@ docker exec mosquitto mosquitto_sub -u safety -P '<mat khau>' -t frigate/availab
 
 Module chạy ngoài Docker thì dùng `MQTT_HOST=127.0.0.1` (xem lưu ý IPv6 ở mục M1).
 
+## Tuần 9 — Điện thoại làm camera IP
+
+Kế hoạch cho phép dùng điện thoại khi không mượn được camera IP. Đã chạy được với iPhone
+(10/11): Frigate nhận 5 khung/giây, module 4,89 khung/giây, sự cố vào Frigate và DB.
+
+```
+iPhone (Larix Broadcaster) --RTMP--> MediaMTX trên laptop (cổng 1935)
+                                         | RTSP cổng 8555
+                                         v
+                              go2rtc của Frigate --> camera dien_thoai --> module đọc :8554/dien_thoai
+```
+
+1. Laptop và điện thoại **cùng mạng Wi-Fi**. Xem IP laptop: `ipconfig` → IPv4 của Wi-Fi.
+2. Trên laptop, để chạy suốt lúc thử: `mediamtx camera\mediamtx-dien-thoai.yml`. Lần đầu Windows hỏi
+   tường lửa: chỉ cho **Private networks**. Luồng không có mật khẩu, chỉ bật trong Wi-Fi tin cậy.
+3. Điện thoại cài **Larix Broadcaster** (iPhone/Android, miễn phí). Bánh răng → Connections → `+`:
+   URL `rtmp://<IP laptop>:1935/live/dien_thoai` (Larix bắt buộc dạng `app/stream`), Mode *Video only*.
+   Video: 1280×720, 30 khung/giây. Bấm nút tròn để phát.
+4. Mở dòng `dien_thoai` trong `go2rtc.streams` và khối camera `dien_thoai` ở cuối `frigate/config.yml`
+   (mẫu trong `config.example.yml`), rồi `docker restart frigate`.
+5. Chạy module: `--source rtsp://127.0.0.1:8554/dien_thoai --camera dien_thoai`.
+
+Lưu ý:
+- Bản miễn phí của Larix **đè chữ "TEST STREAM"** lên giữa hình: chạy thử được, demo thì xấu.
+- Tắt tự khoá màn hình và cắm sạc: màn hình khoá thì Larix ngừng phát.
+- Đặt điện thoại **nằm ngang, cố định** trên cao. Cầm tay xoay dọc thì khung hình bị xoay và rung,
+  mô hình cháy từng báo khói nhầm khi máy đang di chuyển.
+- IP laptop đổi (đổi mạng, router cấp lại) thì sửa URL trong Larix.
+
 ## Lệnh hay dùng
 
 ```powershell
