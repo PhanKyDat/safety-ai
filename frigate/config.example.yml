@@ -33,6 +33,10 @@ go2rtc:
     # --- Giả lập: luồng từ service rtsp-sim (tuần 1–7) ---
     xuong_han: rtsp://rtsp-sim:8554/xuong_han
     xuong_han_sub: rtsp://rtsp-sim:8554/xuong_han_sub
+    # 3 camera kho cho mốc M3 (tuần 8): chỉ ghi hình, không detect nên không cần luồng phụ.
+    kho_1: rtsp://rtsp-sim:8554/kho_1
+    kho_2: rtsp://rtsp-sim:8554/kho_2
+    kho_3: rtsp://rtsp-sim:8554/kho_3
 
     # --- Camera IP thật (tuần 8+): comment 2 dòng trên, mở 2 dòng dưới ---
     # Hikvision: 101 = luồng chính, 102 = luồng phụ
@@ -126,6 +130,41 @@ cameras:
         # Người ở trong vùng nguy hiểm → Alert (module nghe frigate/reviews, lọc
         # severity=alert). Người ở chỗ khác chỉ là Detection, không báo Telegram.
         required_zones: [vung_nguy_hiem]
+
+  # --- 3 camera kho, CHỈ GHI HÌNH (tuần 8, mốc M3) ---------------------------
+  # Đạt đã chạy module với 4 camera (20/20 sự cố nằm đúng camera); 3 camera này để
+  # cả nhóm chạy được cùng một cấu hình. Tắt detect: Frigate chỉ ghi hình, nên thêm
+  # camera gần như không tốn thêm CPU cho bộ phát hiện — đúng cái bài B4 cần tách bạch.
+  # Dùng chung tệp video với xuong_han, lệch giờ bắt đầu (xem sim/mediamtx.yml).
+  kho_1: &kho_chi_ghi_hinh
+    ffmpeg:
+      inputs:
+        - path: rtsp://127.0.0.1:8554/kho_1
+          input_args: preset-rtsp-restream
+          roles: [record]
+    detect:
+      enabled: false
+    # Tắt detect thì cũng phải tắt motion, nếu không Frigate báo lỗi lúc khởi động.
+    motion:
+      enabled: false
+    record:
+      enabled: true
+
+  kho_2:
+    <<: *kho_chi_ghi_hinh
+    ffmpeg:
+      inputs:
+        - path: rtsp://127.0.0.1:8554/kho_2
+          input_args: preset-rtsp-restream
+          roles: [record]
+
+  kho_3:
+    <<: *kho_chi_ghi_hinh
+    ffmpeg:
+      inputs:
+        - path: rtsp://127.0.0.1:8554/kho_3
+          input_args: preset-rtsp-restream
+          roles: [record]
 
   # Điện thoại làm camera IP (tuần 9): 1 luồng 720p cho cả ghi hình lẫn detect, Frigate thu
   # nhỏ xuống 640x360 để detect. Module đọc rtsp://127.0.0.1:8554/dien_thoai.

@@ -57,6 +57,14 @@ docker exec frigate curl -fsS -X POST http://127.0.0.1:5000/api/classification/g
 Gán nhãn cho đúng là phần quyết định: ảnh cắt từ camera trên cao, mũ nhìn từ đỉnh đầu,
 nên nhìn kỹ rồi hãy chọn. Nhãn ẩu thì số liệu B1 vô nghĩa.
 
+> **Không lấy ảnh huấn luyện từ video dùng để đo.** Ảnh mẫu phải cắt từ video kho hoặc
+> các đoạn `train_*`; nếu lấy từ chính `test_*` thì model đã nhìn thấy đúng những người
+> và đúng khung cảnh sẽ đem ra chấm, số liệu B1 đẹp lên một cách giả tạo và so sánh với
+> module thành khập khiễng (module không được huấn luyện trên bộ test).
+>
+> Frigate sinh ảnh mẫu từ **người nó đang bám vết trên camera đang chạy**, nên trước khi
+> bấm *generate examples* thì phát video kho / `train_*` cho `rtsp-sim`, đừng phát `test_*`.
+
 ## 4. Đo B1 (tuần 9)
 
 Phát cùng bộ video kiểm thử cho Frigate, chạy module song song, rồi:

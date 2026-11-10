@@ -38,5 +38,35 @@ paths:
       -rtsp_transport tcp -f rtsp rtsp://localhost:$RTSP_PORT/$MTX_PATH
     runOnInitRestart: yes
 
-  # Thêm camera giả lập (tuần 8, 4–8 camera): chép 2 path trên, đổi tên và file video,
-  # rồi khai camera tương ứng trong frigate/config.yml.
+  # --- 3 camera kho, chỉ ghi hình (tuần 8, mốc M3) ---------------------------
+  # Dùng chung tệp video với xuong_han để khỏi phải quay thêm; Frigate tắt detect
+  # cho mấy camera này nên chỉ có một luồng 720p, không cần luồng phụ.
+  # Mỗi camera lệch giờ bắt đầu một ít (-ss) cho khác nhau, nhìn vào Frigate đỡ rối.
+  #
+  # -c:v copy, KHÔNG mã hoá lại: tệp sẵn là H.264 720p rồi. Mã hoá lại 3 luồng nữa
+  # làm rtsp-sim ngốn hơn 130% CPU, Frigate bắt đầu rớt khung (camera_fps tụt còn
+  # 3,8 và log báo i/o timeout) — đo tài nguyên B4 lúc đó là đo máy giả lập, không
+  # phải đo hệ thống thật.
+  kho_1:
+    runOnInit: >-
+      ffmpeg -hide_banner -loglevel warning -re -stream_loop -1 -ss 3 -i /media/xuong_han.mp4
+      -map 0:v:0 -c:v copy
+      -rtsp_transport tcp -f rtsp rtsp://localhost:$RTSP_PORT/$MTX_PATH
+    runOnInitRestart: yes
+
+  kho_2:
+    runOnInit: >-
+      ffmpeg -hide_banner -loglevel warning -re -stream_loop -1 -ss 9 -i /media/xuong_han.mp4
+      -map 0:v:0 -c:v copy
+      -rtsp_transport tcp -f rtsp rtsp://localhost:$RTSP_PORT/$MTX_PATH
+    runOnInitRestart: yes
+
+  kho_3:
+    runOnInit: >-
+      ffmpeg -hide_banner -loglevel warning -re -stream_loop -1 -ss 15 -i /media/xuong_han.mp4
+      -map 0:v:0 -c:v copy
+      -rtsp_transport tcp -f rtsp rtsp://localhost:$RTSP_PORT/$MTX_PATH
+    runOnInitRestart: yes
+
+  # Thêm camera giả lập nữa: chép một khối trên, đổi tên và tệp video, rồi khai
+  # camera tương ứng trong frigate/config.yml.
