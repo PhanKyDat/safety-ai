@@ -132,11 +132,12 @@ Sự cố tới Frigate trước rồi mới sang Telegram, để tin nhắn kè
 Frigate sập thì Telegram vẫn báo, chỉ là không có đường dẫn. Hai bên gửi ở hai luồng
 riêng nên Telegram chậm không làm sự cố tới Frigate muộn.
 
-Thêm `--vang-mat` để luật đồ bảo hộ suy ra thiếu mũ/áo khi **thấy rõ người** (theo điểm khớp của mô hình
-tư thế) mà không thấy mũ/áo, thay vì chờ mô hình nói `no_helmet`/`no_vest`. Đo 04/11 trên 7 đoạn tự quay
-góc cao: cách cũ bắt 0/6 vi phạm (mô hình PPE nhận được mũ, áo thật nhưng chưa ra lớp "không" lần nào),
-`--vang-mat` bắt 6/6, 0 báo nhầm, AUROC 0,97 (mũ) và 0,85 (áo). Mẫu còn nhỏ; mũ thường bị nhận nhầm là mũ
-bảo hộ thì vẫn sót.
+Luật đồ bảo hộ mặc định dùng **cách vắng mặt**: suy ra thiếu mũ/áo khi **thấy rõ người** (theo điểm khớp
+của mô hình tư thế) mà không thấy mũ/áo, thay vì chờ mô hình nói `no_helmet`/`no_vest`; thêm `--khong-vang-mat`
+để quay về cách cũ (`--vang-mat` vẫn nhận, cho lệnh cũ). Đo 10/11 trên 12 video (10 đoạn tự quay góc cao gồm
+3 đoạn ban đêm có 2 người, cộng 2 video kho): cách cũ bắt 0/15 vi phạm (mô hình PPE nhận được mũ, áo thật
+nhưng chưa ra lớp "không" lần nào); cách vắng mặt bắt 8/8 thiếu mũ và 7/7 thiếu áo, 1 báo nhầm (áo vàng dưới
+đèn đỏ ban đêm không được nhận ra). Mũ thường bị nhận nhầm là mũ bảo hộ thì vẫn sót.
 
 Thêm `--db` để ghi sự cố vào bảng `incidents` ([schemas/incidents.sql](schemas/incidents.sql)),
 cùng tệp với cảnh báo vùng nguy hiểm mà cầu nối MQTT ghi (`INCIDENT_DB` trong `.env`, mặc định

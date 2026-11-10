@@ -145,8 +145,14 @@ def kp_head_only(conf: float = 0.3) -> Detection:
 VANG_MAT = PPEConfig(infer_missing=True)
 
 
-def test_mac_dinh_van_cach_cu_khong_thay_lop_vi_pham_thi_khong_bao():
+def test_mac_dinh_da_bat_cach_vang_mat():
     rule = PPERule("xuong_han")
+    labels = {i.label for i in run(rule, [frame(t / 5, kp_person()) for t in range(21)])}
+    assert labels == {IncidentLabel.NO_HELMET, IncidentLabel.NO_VEST}
+
+
+def test_tat_vang_mat_thi_ve_cach_cu_khong_thay_lop_vi_pham_thi_khong_bao():
+    rule = PPERule("xuong_han", PPEConfig(infer_missing=False))
     assert run(rule, [frame(t / 5, kp_person()) for t in range(30)]) == []
 
 
@@ -192,6 +198,15 @@ def test_vang_mat_nguoi_bi_che_diem_thap_van_bao_thieu_ao():
     rule = PPERule("xuong_han", VANG_MAT)
     frames = [frame(t / 5, kp_person(conf=0.45), at(DetectClass.HELMET, HEAD)) for t in range(21)]
     assert {i.label for i in run(rule, frames)} == {IncidentLabel.NO_VEST}
+
+
+def test_vang_mat_mu_lech_khoi_vung_dau_nhung_che_mat_van_tinh_la_co_mu():
+    """Video đêm 10/11: người sát mép dưới khung hình bị cắt nửa thân, khung người ngắn nên
+    mũ thật nằm lệch ra ngoài 1/4 trên. Mũ đè lên điểm mặt thì vẫn là của người đó."""
+    rule = PPERule("xuong_han", VANG_MAT)
+    helmet_low = at(DetectClass.HELMET, BBox(120, 100, 180, 260))   # điểm mặt ở (150, 120)
+    frames = [frame(t / 5, kp_person(), helmet_low, at(DetectClass.VEST, BODY)) for t in range(30)]
+    assert run(rule, frames) == []
 
 
 def test_vang_mat_can_mo_hinh_tu_the():

@@ -64,8 +64,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--fps", type=float, default=DEFAULT_FPS)
     p.add_argument("--conf", type=float, default=0.25)
     p.add_argument("--vang-mat", action="store_true",
-                   help="Luật đồ bảo hộ suy ra thiếu mũ/áo khi thấy rõ người mà không thấy đồ bảo hộ "
-                        "(cần mô hình tư thế), không chờ mô hình nói no_helmet/no_vest")
+                   help="Giữ cho lệnh cũ: cách vắng mặt đã bật mặc định từ 10/11")
+    p.add_argument("--khong-vang-mat", action="store_true",
+                   help="Tắt cách vắng mặt, quay về chỉ báo khi mô hình nói no_helmet/no_vest. Mặc định "
+                        "luật suy ra thiếu mũ/áo khi thấy rõ người (điểm khớp) mà không thấy đồ bảo hộ")
     p.add_argument("--max-frames", type=int, default=0, help="Số lượt (mỗi lượt một khung mỗi camera), 0 = chạy mãi")
     p.add_argument("--json", action="store_true", help="In FrameResult dạng JSON mỗi dòng")
     p.add_argument("--show", action="store_true", help="Mở cửa sổ xem trực tiếp, nhấn Q để dừng sớm")
@@ -128,7 +130,7 @@ def main(argv: list[str] | None = None) -> int:
     outputs = build_outputs(args.frigate, list(cams), telegram=args.telegram,
                             telegram_when=at_most(args.telegram_max) if args.telegram_max > 0 else None,
                             db_path=db_path(args.db))
-    ppe = PPEConfig(infer_missing=args.vang_mat)
+    ppe = PPEConfig(infer_missing=not args.khong_vang_mat)
     processors = {cam: IncidentProcessor(cam, publisher=outputs, snapshot_dir=args.snapshots, ppe=ppe)
                   for cam in cams}
     log.info("Chạy %d camera: %s", len(cams), ", ".join(f"{c}={u}" for c, u in cams.items()))

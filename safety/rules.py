@@ -36,7 +36,10 @@ class PPEConfig:
     # được mũ và áo thật ở ~3/4 số khung nhưng chưa ra no_helmet/no_vest lần nào, nên
     # luật kiểu cũ bắt 0/6 vi phạm; cách vắng mặt bắt 6/6, 0 báo nhầm (mẫu nhỏ).
     # Giới hạn: mũ thường bị nhận là mũ bảo hộ (mũ lưỡi trai trên video kho) thì vẫn sót.
-    infer_missing: bool = False
+    # Bật mặc định từ 10/11: thêm 3 đoạn ban đêm có 2 người, cả bộ 12 video bắt 8/8 thiếu mũ
+    # và 7/7 thiếu áo (luật kiểu cũ 0/15), 1 báo nhầm (áo vàng dưới đèn đỏ, lỗi mô hình).
+    # Không có mô hình tư thế thì không có điểm khớp, cách này tự không làm gì.
+    infer_missing: bool = True
     kp_conf: float = 0.5
     head_points: int = 2    # số điểm mặt/tai (mũi, 2 mắt, 2 tai) phải thấy rõ
     # Suy ra thiếu mũ còn đòi thấy rõ 2 vai và khung người đủ chắc. Chạy thử demo 06/11, mô
@@ -165,7 +168,9 @@ class PPERule:
         for d in frame.detections:
             if d.cls not in (ok_cls, bad_cls):
                 continue
-            if fraction_inside(d.bbox, region) < self.config.min_inside:
+            if fraction_inside(d.bbox, region) < self.config.min_inside and not (
+                head_only and self._covers_face(d.bbox, person)
+            ):
                 continue
             if d.cls is ok_cls:
                 return False
@@ -174,6 +179,19 @@ class PPERule:
         if bad is None and self.config.infer_missing and self._clearly_visible(person, head_only):
             return person
         return bad
+
+    def _covers_face(self, box: BBox, person: Detection) -> bool:
+        """Mũ nằm đè lên điểm mặt/tai đủ tin cậy của người này.
+
+        Bổ sung cho cách xét "1/4 trên của khung người": người đứng sát mép dưới khung hình
+        bị cắt mất nửa thân, khung người ngắn lại nên vùng đầu quá nhỏ và mũ thật bị bỏ ra
+        ngoài (video ban đêm 10/11: báo "không mũ" người đang đội mũ vàng).
+        """
+        k = person.keypoints
+        if not k:
+            return False
+        return any(p.conf >= self.config.kp_conf and box.x1 <= p.x <= box.x2 and box.y1 <= p.y <= box.y2
+                   for p in k[:5])
 
     def _clearly_visible(self, person: Detection, head_only: bool) -> bool:
         """Thấy rõ đầu (đủ điểm mặt/tai) hoặc thân (2 vai + 2 hông). Không có điểm khớp thì không."""

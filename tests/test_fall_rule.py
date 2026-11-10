@@ -7,7 +7,7 @@ import numpy as np
 
 from safety.contracts import BBox, Detection, DetectClass, FrameResult, IncidentLabel, Keypoint, Severity
 from safety.incidents import IncidentProcessor
-from safety.rules import ExcludeZone, FallConfig, FallRule, body_tilt
+from safety.rules import ExcludeZone, FallConfig, FallRule, PPEConfig, body_tilt
 
 T0 = 1789012340.0
 
@@ -109,7 +109,8 @@ def test_mo_hinh_khong_co_diem_khop_thi_khong_bao():
 
 def test_su_co_nga_di_qua_bo_xu_ly_va_frigate_khoanh_nguoi(tmp_path):
     """Người đã nằm thì đứng yên, nên Frigate chụp muộn ~0,3 s vẫn khoanh đúng."""
-    proc = IncidentProcessor("xuong_han", snapshot_dir=tmp_path)
+    # Người giả chỉ có điểm khớp, không có mũ/áo: tắt cách vắng mặt để chỉ xét luồng sự cố ngã.
+    proc = IncidentProcessor("xuong_han", snapshot_dir=tmp_path, ppe=PPEConfig(infer_missing=False))
     image = np.zeros((360, 640, 3), dtype=np.uint8)
     out = []
     for f in frames([LYING] * 16):
