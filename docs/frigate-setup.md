@@ -358,6 +358,21 @@ Ba camera kho dùng chung tệp video với `xuong_han`, lệch giờ bắt đ�
 Bài B4 đo tài nguyên phải nhớ điều này: nếu máy giả lập ngốn CPU thì con số đo được là
 của máy giả lập, không phải của hệ thống.
 
+### Đo B3 và B4 (tuần 9–10)
+
+```powershell
+.venv\Scripts\python.exe scripts\do_b3.py --lan 10                  # do tre
+.venv\Scripts\python.exe scripts\do_b4.py --so-camera 1 4 8 --phut 3  # tai nguyen
+```
+
+`do_b3.py` tạo sự cố thật qua API rồi bấm giờ từng chặng (API trả mã → Frigate thực sự có
+→ Telegram nhận). Mỗi lần đo **gửi một tin thật vào nhóm Telegram**, nên lúc chỉ cần phần
+Frigate thì thêm `--khong-telegram`, hoặc trỏ `TELEGRAM_CHAT_ID` sang chat riêng.
+
+`do_b4.py` tự sinh `frigate/config.yml` cho 1 / 4 / 8 camera, khởi động lại Frigate, chờ
+60 giây rồi lấy mẫu, xong **trả lại cấu hình cũ**. Camera thứ 5–8 nằm trong `sim/mediamtx.yml`
+ở chế độ `runOnDemand` nên ngày thường không chạy, không tốn tài nguyên.
+
 ### Chạy dài ≥ 8 giờ
 
 ```powershell
