@@ -77,8 +77,31 @@ Phía module đã đo (26/10, RTX 3050 Ti 4 GB, 3 mô hình, luồng 720p 25 khu
 |---|---|---|---|
 | Module, chỉ suy luận | 40 ms/lô | 67 ms/lô | 121 ms/lô, GPU ~370 MB |
 | Module chạy thật qua RTSP | | 4,84 khung/giây/camera (4,91 khi chạy cùng Frigate) | 4,46 khung/giây/camera |
-| Frigate thuần: CPU, GPU, RAM | **chưa đo** (Uy) | **chưa đo** | **chưa đo** |
-| Frigate + module: CPU, GPU, RAM | **chưa đo** (Uy) | **chưa đo** | **chưa đo** |
+Phía Frigate đã đo (11/11, máy Uy: i5-13400F 16 luồng, 16 GB RAM, Frigate 0.17.2 trong Docker,
+bộ phát hiện **CPU**, mỗi mức lấy 9 mẫu trong 3 phút sau khi chờ ổn định 60 giây):
+
+| | 1 camera | 4 camera | 8 camera |
+|---|---|---|---|
+| Frigate thuần: CPU trung bình | 88,6% | 120,6% | 149,7% |
+| Frigate thuần: CPU đỉnh | 112,8% | 146,2% | 190,9% |
+| Frigate thuần: RAM | 652 MB | 984 MB | 1310 MB |
+| Frigate thuần: GPU | 0 (bộ phát hiện chạy CPU) | 0 | 0 |
+| Thời gian một lần phát hiện | 12,6 ms | 13,2 ms | 13,7 ms |
+| FPS trung bình các camera | 5,04 | 4,44 | 4,26 |
+| Frigate + module: CPU, GPU, RAM | **chưa đo** (cần chạy module cùng lúc trên một máy) | **chưa đo** | **chưa đo** |
+
+Đọc số này ra sao:
+
+* **Chỉ `xuong_han` bật phát hiện**, 3–7 camera còn lại chỉ ghi hình. Thêm camera chỉ ghi
+  hình tốn thêm khoảng **8–10% CPU và 90 MB RAM mỗi camera** — phần giải mã và ghi đĩa,
+  không đụng tới bộ phát hiện (thời gian một lần phát hiện gần như không đổi: 12,6 → 13,7 ms).
+* **FPS tụt dần** (5,04 → 4,26) và có lúc chạm 1,2 ở mức 4 và 8 camera. Máy đang chạy cả
+  máy giả lập lẫn Frigate, nên đây là giới hạn của một laptop chứ không phải của Frigate.
+* Bật phát hiện cho cả 8 camera thì phải đổi sang OpenVINO hoặc GPU; con số trên chỉ đúng
+  cho cấu hình "1 camera phát hiện + n camera ghi hình".
+
+Đo bằng `scripts/do_b4.py` (tự sinh cấu hình từng mức, khởi động lại Frigate, chờ ổn định rồi
+lấy mẫu, xong trả lại cấu hình cũ). Kết quả thô: `data/b4_2026-11-11_0500.csv`.
 
 Chỗ nghẽn của module là CPU giải mã video (8 luồng 720p tốn 22% CPU), không phải GPU.
 
