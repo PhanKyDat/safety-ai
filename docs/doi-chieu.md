@@ -22,12 +22,19 @@ Cập nhật lần cuối: 10/11 (tuần 9).
 
 | | Frigate Object Classification | Module nhóm (cách vắng mặt) |
 |---|---|---|
-| Recall thiếu mũ | **chưa đo** (Uy: model `mu_bao_ho` đã dựng, 101 ảnh mẫu, chưa huấn luyện) | 8/8 khoảng vi phạm (100%) |
+| Recall thiếu mũ | **chưa đo — tắc dữ liệu huấn luyện** (xem dưới) | 8/8 khoảng vi phạm (100%) |
 | Precision | **chưa đo** | 100% (0 báo nhầm) |
 | Bộ đo | 12 video: 10 đoạn tự quay góc cao (7 ban ngày 1 người, 3 ban đêm 2 người) + 2 video kho | |
 
 Cách chạy: `docs/doi-chung-b1.md`. Số của module: `scripts/evaluate_videos.py` (mặc định đã dùng
 cách vắng mặt), kết quả `runs/eval/tuan9_tat_ca`.
+
+**Tắc ở đâu (11/11):** model `mu_bao_ho` đã khai trong Frigate, đã sinh 224 ảnh mẫu từ video
+kho và soi hết 41 ảnh đại diện — nhưng **không có ảnh "có mũ" nào dùng được**: video kho chỉ
+có một người đầu trần hay đi một mình, còn hai người đội mũ len thì luôn đi sát nhau nên ảnh
+cắt nào cũng dính hai người. Lấy mấy ảnh đó làm lớp `co_mu` thì model học "khung có hai người"
+chứ không học "có đội mũ". Cần video có người đội **mũ bảo hộ, đi một mình**, quay góc cao
+(`train_*` của Đạt hoặc quay thêm) rồi sinh lại ảnh mẫu. Chi tiết: `docs/doi-chung-b1.md`.
 
 ## 3. B2 — Lửa / khói, ngã: Frigate thuần so với có module
 
@@ -49,9 +56,18 @@ giả (`docs/du-lieu-cong-khai.md`):
 | Đoạn | Số đo | Ghi chú |
 |---|---|---|
 | Vi phạm bắt đầu → luật báo (trong module) | Trung vị 3,4 s (thiếu áo), 5,3 s (thiếu mũ) trên 12 video | Gồm 3 s luật cố ý chờ để chống báo nhầm thoáng qua |
-| Luật báo → sự cố có trong Frigate | **chưa đo** (Uy) | Module gửi API ngay, một luồng riêng |
-| Luật báo → tin tới Telegram | **chưa đo** (Uy) | Gửi sau khi Frigate trả mã sự cố |
-| Mục tiêu (mục 9) | ≤ 5 s | |
+| Luật báo → API trả mã sự cố | Trung vị 0,00 s (lớn nhất 0,02 s), n=10 | Gọi trong mạng Docker nên gần như tức thì |
+| Luật báo → sự cố có trong Frigate | **Trung vị 0,22 s** (0,20–0,24), n=10 | Hỏi lại `/events/<id>` tới khi Frigate thực sự có |
+| Luật báo → tin tới Telegram | **Trung vị 0,48 s** (0,44–2,17), n=10 | Lần đầu 2,17 s do bắt tay TLS, các lần sau ~0,45 s |
+| Mục tiêu (mục 9) | ≤ 5 s | **Đạt**: 3,4–5,3 s (luật) + 0,5 s ≈ 3,9–5,8 s; phần chậm là 3 s luật cố ý chờ |
+
+Đo bằng `scripts/do_b3.py` ngày 11/11 trên máy Uy (i5-13400F, Frigate 0.17.2 trong Docker,
+4 camera đang chạy). Script tạo sự cố thật qua API y như module vẫn làm rồi bấm giờ từng
+chặng; sự cố thử đã xoá khỏi Frigate sau khi đo.
+
+Lưu ý khi viết báo cáo: chuỗi 5 giây gần như **chỉ nằm ở luật** (3 giây cố ý chờ để chống
+báo nhầm thoáng qua). Phần hạ tầng — gọi API, Frigate ghi nhận, Telegram nhận tin — cộng
+lại chưa tới 0,8 giây.
 
 ## 5. B4 — Tài nguyên với 1, 4, 8 camera
 

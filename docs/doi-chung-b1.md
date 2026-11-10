@@ -65,6 +65,26 @@ nên nhìn kỹ rồi hãy chọn. Nhãn ẩu thì số liệu B1 vô nghĩa.
 > Frigate sinh ảnh mẫu từ **người nó đang bám vết trên camera đang chạy**, nên trước khi
 > bấm *generate examples* thì phát video kho / `train_*` cho `rtsp-sim`, đừng phát `test_*`.
 
+### Vì sao chưa huấn luyện được (11/11)
+
+Đã sinh 224 ảnh mẫu từ video kho và soi hết 41 ảnh đại diện (mỗi lượt bám vết lấy một
+ảnh). Kết quả: **không có ảnh "có mũ" nào dùng được.**
+
+| Nhóm ảnh | Số lượt bám vết | Dùng được? |
+|---|---|---|
+| Người đầu trần, đứng một mình | 7 | Được — lớp `khong_mu` |
+| Người đội mũ len đỏ / xanh | 10 | **Không** — lúc nào cũng có hai người trong cùng một khung cắt |
+
+Video kho chỉ có ba người: một người đầu trần hay đi một mình, hai người đội mũ len thì
+luôn đi sát nhau nên Frigate cắt trúng cả hai. Lấy mấy ảnh đó làm lớp `co_mu` thì model
+học "khung có hai người" chứ không học "có đội mũ", và số B1 sẽ sai theo hướng khó đoán.
+
+Thêm một điểm nữa: trong video là **mũ len và mũ lưỡi trai**, không phải mũ bảo hộ.
+
+Cần để chạy tiếp: video có người **đội mũ bảo hộ, đi một mình**, quay góc cao — dùng
+`train_*` của Đạt hoặc quay thêm. Có video rồi thì phát cho `rtsp-sim`, sinh lại ảnh mẫu
+và huấn luyện theo mục 3 ở trên.
+
 ## 4. Đo B1 (tuần 9)
 
 Phát cùng bộ video kiểm thử cho Frigate, chạy module song song, rồi:

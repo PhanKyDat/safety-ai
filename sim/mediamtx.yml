@@ -24,7 +24,7 @@ paths:
       -map 0:v:0 -vf scale=-2:720 -c:v libx264 -preset ultrafast -tune zerolatency -g 25
       -b:v 2M -maxrate 2M -bufsize 4M
       -rtsp_transport tcp -f rtsp rtsp://localhost:$RTSP_PORT/$MTX_PATH
-    runOnInitRestart: yes
+    runOnInitRestart: true
 
   # Luồng phụ 360p, 10 FPS — Frigate và module detect ở 5 FPS nên không cần hơn.
   # Lấy từ luồng chính thay vì đọc file lần nữa, để hai luồng luôn cùng một khoảnh
@@ -36,7 +36,7 @@ paths:
       -map 0:v:0 -vf scale=-2:360,fps=10 -c:v libx264 -preset ultrafast -tune zerolatency -g 10
       -b:v 500k -maxrate 500k -bufsize 1M
       -rtsp_transport tcp -f rtsp rtsp://localhost:$RTSP_PORT/$MTX_PATH
-    runOnInitRestart: yes
+    runOnInitRestart: true
 
   # --- 3 camera kho, chỉ ghi hình (tuần 8, mốc M3) ---------------------------
   # Dùng chung tệp video với xuong_han để khỏi phải quay thêm; Frigate tắt detect
@@ -52,21 +52,54 @@ paths:
       ffmpeg -hide_banner -loglevel warning -re -stream_loop -1 -ss 3 -i /media/xuong_han.mp4
       -map 0:v:0 -c:v copy
       -rtsp_transport tcp -f rtsp rtsp://localhost:$RTSP_PORT/$MTX_PATH
-    runOnInitRestart: yes
+    runOnInitRestart: true
 
   kho_2:
     runOnInit: >-
       ffmpeg -hide_banner -loglevel warning -re -stream_loop -1 -ss 9 -i /media/xuong_han.mp4
       -map 0:v:0 -c:v copy
       -rtsp_transport tcp -f rtsp rtsp://localhost:$RTSP_PORT/$MTX_PATH
-    runOnInitRestart: yes
+    runOnInitRestart: true
 
   kho_3:
     runOnInit: >-
       ffmpeg -hide_banner -loglevel warning -re -stream_loop -1 -ss 15 -i /media/xuong_han.mp4
       -map 0:v:0 -c:v copy
       -rtsp_transport tcp -f rtsp rtsp://localhost:$RTSP_PORT/$MTX_PATH
-    runOnInitRestart: yes
+    runOnInitRestart: true
+
+  # --- 4 camera nữa, CHỈ cho bài B4 (tuần 10) --------------------------------
+  # runOnDemand: chỉ chạy khi có client kết nối, nên ngày thường 4 luồng này không
+  # tốn gì; chạy B4 với cấu hình 8 camera thì Frigate kết nối và chúng tự bật.
+  # runOnDemandRestart phải là true/false — MediaMTX đọc bằng Go, "yes" bị hiểu là chuỗi
+  # và nó báo "cannot unmarshal string into Go value of type bool".
+  kho_4:
+    runOnDemand: >-
+      ffmpeg -hide_banner -loglevel warning -re -stream_loop -1 -ss 2 -i /media/xuong_han.mp4
+      -map 0:v:0 -c:v copy -rtsp_transport tcp -f rtsp rtsp://localhost:$RTSP_PORT/$MTX_PATH
+    runOnDemandRestart: true
+    runOnDemandCloseAfter: 10s
+
+  kho_5:
+    runOnDemand: >-
+      ffmpeg -hide_banner -loglevel warning -re -stream_loop -1 -ss 5 -i /media/xuong_han.mp4
+      -map 0:v:0 -c:v copy -rtsp_transport tcp -f rtsp rtsp://localhost:$RTSP_PORT/$MTX_PATH
+    runOnDemandRestart: true
+    runOnDemandCloseAfter: 10s
+
+  kho_6:
+    runOnDemand: >-
+      ffmpeg -hide_banner -loglevel warning -re -stream_loop -1 -ss 8 -i /media/xuong_han.mp4
+      -map 0:v:0 -c:v copy -rtsp_transport tcp -f rtsp rtsp://localhost:$RTSP_PORT/$MTX_PATH
+    runOnDemandRestart: true
+    runOnDemandCloseAfter: 10s
+
+  kho_7:
+    runOnDemand: >-
+      ffmpeg -hide_banner -loglevel warning -re -stream_loop -1 -ss 11 -i /media/xuong_han.mp4
+      -map 0:v:0 -c:v copy -rtsp_transport tcp -f rtsp rtsp://localhost:$RTSP_PORT/$MTX_PATH
+    runOnDemandRestart: true
+    runOnDemandCloseAfter: 10s
 
   # Thêm camera giả lập nữa: chép một khối trên, đổi tên và tệp video, rồi khai
   # camera tương ứng trong frigate/config.yml.
