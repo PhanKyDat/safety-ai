@@ -4,7 +4,7 @@ Mục 6 của kế hoạch: module của nhóm thêm được gì so với Friga
 tài nguyên. Tài liệu này gom mọi số đo về một chỗ để cắt thẳng vào báo cáo cuối kỳ; ô nào ghi
 **chưa đo** là còn chờ, kèm người phụ trách.
 
-Cập nhật lần cuối: 10/11 (tuần 9).
+Cập nhật lần cuối: 11/11 (tuần 10).
 
 ## 1. So sánh tính năng (mục 6.1)
 
@@ -22,19 +22,19 @@ Cập nhật lần cuối: 10/11 (tuần 9).
 
 | | Frigate Object Classification | Module nhóm (cách vắng mặt) |
 |---|---|---|
-| Recall thiếu mũ | **chưa đo — tắc dữ liệu huấn luyện** (xem dưới) | 8/8 khoảng vi phạm (100%) |
+| Recall thiếu mũ | **chưa đo** — model đã huấn luyện 11/11, chờ Trường đo trên `test_*` | 8/8 khoảng vi phạm (100%) |
 | Precision | **chưa đo** | 100% (0 báo nhầm) |
 | Bộ đo | 12 video: 10 đoạn tự quay góc cao (7 ban ngày 1 người, 3 ban đêm 2 người) + 2 video kho | |
 
 Cách chạy: `docs/doi-chung-b1.md`. Số của module: `scripts/evaluate_videos.py` (mặc định đã dùng
 cách vắng mặt), kết quả `runs/eval/tuan9_tat_ca`.
 
-**Tắc ở đâu (11/11):** model `mu_bao_ho` đã khai trong Frigate, đã sinh 224 ảnh mẫu từ video
-kho và soi hết 41 ảnh đại diện — nhưng **không có ảnh "có mũ" nào dùng được**: video kho chỉ
-có một người đầu trần hay đi một mình, còn hai người đội mũ len thì luôn đi sát nhau nên ảnh
-cắt nào cũng dính hai người. Lấy mấy ảnh đó làm lớp `co_mu` thì model học "khung có hai người"
-chứ không học "có đội mũ". Cần video có người đội **mũ bảo hộ, đi một mình**, quay góc cao
-(`train_*` của Đạt hoặc quay thêm) rồi sinh lại ảnh mẫu. Chi tiết: `docs/doi-chung-b1.md`.
+**Model Frigate đã huấn luyện (11/11):** 149 ảnh `co_mu` + 107 ảnh `khong_mu`, lấy từ video
+Pexels và video kho, **không lấy từ `test_*`**. Kiểm tra sơ bộ trên 3 đoạn chưa dùng để huấn
+luyện: đúng 4/4 lượt bám vết — nhưng phần "có mũ" là cùng diễn viên với dữ liệu huấn luyện, và
+một người đội mũ lưỡi trai Frigate không nhận ra là người nên không được phân loại. Đó chỉ là
+kiểm tra model chạy được; số B1 thật là số đo trên `test_*`. Nguồn dữ liệu, cách gán nhãn và
+các điểm cần nói trong báo cáo: `docs/doi-chung-b1.md` mục 3.1–3.2.
 
 ## 3. B2 — Lửa / khói, ngã: Frigate thuần so với có module
 
@@ -59,7 +59,7 @@ giả (`docs/du-lieu-cong-khai.md`):
 | Luật báo → API trả mã sự cố | Trung vị 0,00 s (lớn nhất 0,02 s), n=10 | Gọi trong mạng Docker nên gần như tức thì |
 | Luật báo → sự cố có trong Frigate | **Trung vị 0,22 s** (0,20–0,24), n=10 | Hỏi lại `/events/<id>` tới khi Frigate thực sự có |
 | Luật báo → tin tới Telegram | **Trung vị 0,48 s** (0,44–2,17), n=10 | Lần đầu 2,17 s do bắt tay TLS, các lần sau ~0,45 s |
-| Mục tiêu (mục 9) | ≤ 5 s | **Đạt**: 3,4–5,3 s (luật) + 0,5 s ≈ 3,9–5,8 s; phần chậm là 3 s luật cố ý chờ |
+| Mục tiêu (mục 9) | ≤ 5 s | 3,4–5,3 s (luật) + 0,5 s ≈ 3,9–5,8 s: **thiếu áo đạt, thiếu mũ vượt 0,8 s**; phần chậm là 3 s luật cố ý chờ |
 
 Đo bằng `scripts/do_b3.py` ngày 11/11 trên máy Uy (i5-13400F, Frigate 0.17.2 trong Docker,
 4 camera đang chạy). Script tạo sự cố thật qua API y như module vẫn làm rồi bấm giờ từng
@@ -112,6 +112,6 @@ Chỗ nghẽn của module là CPU giải mã video (8 luồng 720p tốn 22% CP
 | mAP50 mũ, áo, người | ≥ 0,80 | mũ 0,825; áo 0,743 (tập ảnh test cố định, bản finetune_v1) | Mũ đạt, áo chưa |
 | Recall lửa / ngã trên video kiểm thử | ≥ 0,90 | lửa 0,91 (10/11); ngã 0,27 (8/30, UR Fall) | Lửa đạt, ngã chưa |
 | Báo nhầm mỗi giờ video mỗi camera | Ghi số đo thật | Đồ bảo hộ 10,8/giờ trên 12 video (1 lần trong 334 s); lửa 15,7/giờ trên FIRESENSE | Đã có số |
-| Độ trễ tới Frigate / Telegram | ≤ 5 s | Luật báo sau 3,4–5,3 s; phần tới Frigate/Telegram chưa đo | Chờ B3 |
+| Độ trễ tới Frigate / Telegram | ≤ 5 s | Trung vị 3,9 s (thiếu áo), 5,8 s (thiếu mũ) = luật + ~0,5 s hạ tầng | Thiếu áo đạt; thiếu mũ vượt 0,8 s, do 3 s luật cố ý chờ (mục 4) |
 | Số camera chạy đồng thời | Ghi số đo thật | 8 camera ở 4,46 khung/giây (mục tiêu 5) trên laptop; 4 camera đạt | Đã có số |
 | Chạy liên tục không lỗi | ≥ 8 giờ, tự nối lại khi mất luồng | **chưa chạy** (Uy + Đạt) | Chờ |

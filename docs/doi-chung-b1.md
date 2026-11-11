@@ -37,8 +37,9 @@ mà tuần sau còn thêm áo phản quang nữa thì hai thứ đè lên nhau.
 
 ## 3. Gán nhãn và huấn luyện (làm trên giao diện Frigate)
 
-Đã chuẩn bị sẵn trên máy: model `mu_bao_ho`, hai lớp `co_mu` / `khong_mu`, và **101 ảnh
-mẫu** cắt từ người mà Frigate đã bám vết (lớp `none` Frigate tự thêm).
+**Trạng thái (11/11): đã huấn luyện xong** — 149 ảnh `co_mu` + 107 ảnh `khong_mu`, file
+model ở `/config/model_cache/mu_bao_ho/` trong container (xem mục 3.1). Muốn huấn luyện
+lại hoặc thêm ảnh thì làm theo các bước dưới.
 
 1. Mở <https://localhost:8971> → **Classification** → `mu_bao_ho`.
 2. Frigate hiện lần lượt từng lớp. Ở lớp `co_mu` chọn hết ảnh người **có đội mũ**, sang
@@ -65,27 +66,76 @@ nên nhìn kỹ rồi hãy chọn. Nhãn ẩu thì số liệu B1 vô nghĩa.
 > Frigate sinh ảnh mẫu từ **người nó đang bám vết trên camera đang chạy**, nên trước khi
 > bấm *generate examples* thì phát video kho / `train_*` cho `rtsp-sim`, đừng phát `test_*`.
 
-### Vì sao chưa huấn luyện được (11/11)
+### 3.1. Đã huấn luyện thế nào (11/11)
 
-Đã sinh 224 ảnh mẫu từ video kho và soi hết 41 ảnh đại diện (mỗi lượt bám vết lấy một
-ảnh). Kết quả: **không có ảnh "có mũ" nào dùng được.**
+Lần đầu (sinh ảnh từ video kho) bị tắc vì video kho không có ai đội mũ bảo hộ đi một mình —
+hai người đội mũ len luôn đi sát nhau nên ảnh cắt dính cả hai. Đã gỡ bằng cách lấy thêm
+video công khai trên Pexels (giấy phép dùng tự do), **không lấy gì từ `test_*`**:
 
-| Nhóm ảnh | Số lượt bám vết | Dùng được? |
+| Nguồn | Lớp | Vì sao chọn |
 |---|---|---|
-| Người đầu trần, đứng một mình | 7 | Được — lớp `khong_mu` |
-| Người đội mũ len đỏ / xanh | 10 | **Không** — lúc nào cũng có hai người trong cùng một khung cắt |
+| Pexels 10817415 (mũ xanh, kho hàng) | `co_mu` | Người đội mũ bảo hộ đi một mình |
+| Pexels 7448386 (bản 1080p, cắt vùng 800×450) | `co_mu` | Mũ đỏ nhìn **từ trên cao**, giống góc camera xưởng |
+| Pexels 5100046 + 5100047 (cùng một người) | cả hai | Cùng người, cùng cảnh: lúc đầu trần, lúc đội mũ |
+| Pexels 5100055 (mũ cam) | `co_mu` | Thêm màu mũ |
+| Video kho của nhóm | `khong_mu` | Mũ len, mũ lưỡi trai, người đầu trần |
 
-Video kho chỉ có ba người: một người đầu trần hay đi một mình, hai người đội mũ len thì
-luôn đi sát nhau nên Frigate cắt trúng cả hai. Lấy mấy ảnh đó làm lớp `co_mu` thì model
-học "khung có hai người" chứ không học "có đội mũ", và số B1 sẽ sai theo hướng khó đoán.
+Các đoạn được nối thành một video, chống rung, thêm 5 giây hình đứng yên ở đầu mỗi đoạn để
+Frigate dò chuyển động không báo "cả khung đang động", rồi phát cho `rtsp-sim`. Ảnh Frigate tự
+cắt được gán nhãn **theo từng lượt bám vết** (xem ảnh rồi gán cả lượt), bỏ những ảnh lúc người
+đang đội/bỏ mũ dở dang. Gán và huấn luyện qua API (cùng tác dụng với bấm trên giao diện):
 
-Thêm một điểm nữa: trong video là **mũ len và mũ lưỡi trai**, không phải mũ bảo hộ.
+```text
+POST /api/classification/mu_bao_ho/dataset/categorize   {"category": "co_mu", "training_file": "<ảnh>"}
+POST /api/classification/mu_bao_ho/train
+```
 
-Cần để chạy tiếp: video có người **đội mũ bảo hộ, đi một mình**, quay góc cao — dùng
-`train_*` của Đạt hoặc quay thêm. Có video rồi thì phát cho `rtsp-sim`, sinh lại ảnh mẫu
-và huấn luyện theo mục 3 ở trên.
+Log Frigate: `Wrote training metadata for mu_bao_ho: 256 images` → `Successfully loaded updated model`.
+
+Ba quyết định gán nhãn cần ghi vào báo cáo:
+
+* **Mũ len, mũ lưỡi trai = `khong_mu`.** Đó không phải mũ bảo hộ; bộ test còn có cảnh bẫy
+  `bay_mu_luoi_trai` đúng chỗ này.
+* **Tránh để góc quay thành "đáp án".** Nếu mọi ảnh `co_mu` quay ngang mắt còn mọi ảnh
+  `khong_mu` quay từ trên cao thì model sẽ học góc quay chứ không học mũ. Vì vậy thêm mũ nhìn
+  từ trên cao (7448386) và cặp cùng-người-cùng-cảnh (5100046/47).
+* Người đầu hói trong video kho chỉ lấy những ảnh nhìn rõ đầu, ảnh mờ thì bỏ.
+
+### 3.2. Kiểm tra sơ bộ trên đoạn chưa từng đưa vào huấn luyện
+
+Dựng một video 67 giây từ ba đoạn Pexels chưa dùng để huấn luyện (5100045, 5100044: người đội
+mũ cam; 6079431: xưởng có người đầu trần và người đội mũ lưỡi trai), chạy 3 vòng qua Frigate:
+
+| Lượt bám vết | Thật | Frigate gán | Điểm |
+|---|---|---|---|
+| Người đội mũ cam (2 đoạn, Frigate nối thành một lượt) | có mũ | `co_mu` | 1,00 (16/16 lần phân loại) |
+| Người đầu trần, vòng 1 | không mũ | `khong_mu` | 0,92 |
+| Người đầu trần, vòng 2 | không mũ | `khong_mu` | 0,98 |
+| Người đầu trần, vòng 3 | không mũ | `khong_mu` | 0,96 |
+
+Đúng 4/4 lượt. Mọi lần phân loại có điểm ≥ ngưỡng 0,8 trên người thật đều đúng; 2 lần sai
+đều điểm thấp (0,50 và 0,60) nên Frigate đã tự bỏ qua.
+
+**Đây chỉ là kiểm tra model chạy được, chưa phải số B1**, vì:
+
+* Người đội mũ trong 5100044/45 là **cùng diễn viên** với 5100046/47 đã dùng để huấn luyện,
+  nên phần "có mũ" dễ hơn thực tế.
+* **Người đội mũ lưỡi trai trong 6079431 Frigate không nhận ra là người** (quay sau lưng, lẫn
+  giữa máy móc) nên không được phân loại. Phân loại chỉ chạy trên người Frigate đã bám vết —
+  bỏ sót ở khâu phát hiện thì khâu phân loại không cứu được. Khi đo B1 phải tách hai loại
+  bỏ sót này.
+* Có 2 lần Frigate nhận nhầm kệ hàng là người và model gán `co_mu` (0,66 và 0,94). Lỗi ở
+  khâu phát hiện, nhưng sẽ tính thành báo nhầm nếu chỉ đếm thuộc tính.
+* Dữ liệu huấn luyện là video stock, bộ `test_*` là nhóm tự quay — khác ánh sáng, khác mũ,
+  khác góc. Số trên `test_*` gần như chắc chắn thấp hơn bảng trên.
 
 ## 4. Đo B1 (tuần 9)
+
+Model nằm ở `frigate/model_cache/mu_bao_ho/` (`model.tflite` + `labelmap.txt`, đã gitignore).
+Đo trên máy khác thì chép nguyên thư mục này sang cùng chỗ, đảm bảo `config.yml` có khối
+`classification.custom.mu_bao_ho` như mục 2, rồi khởi động lại Frigate — không cần huấn luyện lại.
+Kiểm tra model đã nạp: log Frigate không báo lỗi `mu_bao_ho`, và sau khi có người đi qua thì
+`/api/events` có trường `data.mu_bao_ho`.
 
 Phát cùng bộ video kiểm thử cho Frigate, chạy module song song, rồi:
 
@@ -93,7 +143,8 @@ Phát cùng bộ video kiểm thử cho Frigate, chạy module song song, rồi:
 .venv\Scripts\python.exe scripts\b1_doi_chung.py --gio 2 --db data\incidents.db
 ```
 
-Script lấy thuộc tính `mu_bao_ho` từ API sự kiện của Frigate, lấy sự cố `no_helmet` từ
+Script lấy thuộc tính `mu_bao_ho` từ API sự kiện của Frigate (Frigate 0.17 ghi ở
+`data.mu_bao_ho`, đã sửa script đọc đúng chỗ này ngày 11/11), lấy sự cố `no_helmet` từ
 bảng `incidents`, rồi in ra số người Frigate cho là không mũ, số sự cố module bắt được,
 và phần chồng nhau theo cửa sổ thời gian. Đối chiếu với nhãn thời điểm sự cố của bộ video
 kiểm thử để ra precision/recall cho từng bên.

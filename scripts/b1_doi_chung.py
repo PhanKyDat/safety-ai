@@ -52,7 +52,11 @@ def lay_su_kien_frigate(api: str, tu_ts: float, limit: int = 500) -> list[dict]:
 def nhan_phan_loai(event: dict) -> str | None:
     """Giá trị thuộc tính mu_bao_ho của một sự kiện, nếu Frigate đã gán."""
     data = event.get("data") or {}
-    # Frigate để thuộc tính ở data.attributes (dạng {ten: gia_tri}) hoặc sub_label.
+    # Frigate 0.17 ghi kết quả phân loại kiểu attribute thẳng vào data:
+    # {"mu_bao_ho": "khong_mu", "mu_bao_ho_score": 0.96} (đã kiểm 11/11).
+    if data.get(MODEL):
+        return str(data[MODEL])
+    # Dự phòng cho bản Frigate khác: data.attributes dạng {ten: gia_tri} hoặc danh sách.
     thuoc_tinh = data.get("attributes") or {}
     if isinstance(thuoc_tinh, dict) and MODEL in thuoc_tinh:
         return str(thuoc_tinh[MODEL])
