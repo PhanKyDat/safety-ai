@@ -334,6 +334,66 @@ Lưu ý:
   mô hình cháy từng báo khói nhầm khi máy đang di chuyển.
 - IP laptop đổi (đổi mạng, router cấp lại) thì sửa URL trong Larix.
 
+## Tuần 8 — Nhiều camera và chạy dài (mốc M3)
+
+### 4 camera cùng lúc
+
+`frigate/config.example.yml` khai sẵn 4 camera để cả nhóm chạy giống nhau:
+
+| Camera | Vai trò | Detect |
+|---|---|---|
+| `xuong_han` | ghi hình + phát hiện, có vùng nguy hiểm | bật, 5 FPS, 640×360 |
+| `kho_1`, `kho_2`, `kho_3` | chỉ ghi hình | **tắt** |
+
+Tắt `detect` thì phải tắt luôn `motion`, nếu không Frigate báo lỗi lúc khởi động.
+
+Ba camera kho dùng chung tệp video với `xuong_han`, lệch giờ bắt đầu bằng `-ss`, và
+**chép thẳng luồng** (`-c:v copy`) chứ không mã hoá lại. Đo thực tế trên máy Uy:
+
+| Cách làm | CPU rtsp-sim | CPU frigate | Hiện tượng |
+|---|---|---|---|
+| Mã hoá lại 4 luồng 720p | ~130% | ~117% | `camera_fps` tụt còn 3,8; log báo `i/o timeout` |
+| Chép luồng cho 3 camera kho | ~26% | ~118% | không còn timeout, 4 camera ghi hình đều |
+
+Bài B4 đo tài nguyên phải nhớ điều này: nếu máy giả lập ngốn CPU thì con số đo được là
+của máy giả lập, không phải của hệ thống.
+
+### Đo B3 và B4 (tuần 9–10)
+
+```powershell
+.venv\Scripts\python.exe scripts\do_b3.py --lan 10                  # do tre
+.venv\Scripts\python.exe scripts\do_b4.py --so-camera 1 4 8 --phut 3  # tai nguyen
+```
+
+`do_b3.py` tạo sự cố thật qua API rồi bấm giờ từng chặng (API trả mã → Frigate thực sự có
+→ Telegram nhận). Mỗi lần đo **gửi một tin thật vào nhóm Telegram**, nên lúc chỉ cần phần
+Frigate thì thêm `--khong-telegram`, hoặc trỏ `TELEGRAM_CHAT_ID` sang chat riêng.
+
+`do_b4.py` tự sinh `frigate/config.yml` cho 1 / 4 / 8 camera, khởi động lại Frigate, chờ
+60 giây rồi lấy mẫu, xong **trả lại cấu hình cũ**. Camera thứ 5–8 nằm trong `sim/mediamtx.yml`
+ở chế độ `runOnDemand` nên ngày thường không chạy, không tốn tài nguyên.
+
+### Chạy dài ≥ 8 giờ
+
+```powershell
+.venv\Scripts\python.exe scripts\do_on_dinh.py --gio 8
+.venv\Scripts\python.exe scripts\do_on_dinh.py --tong-ket data\on_dinh_<ngay>.csv
+```
+
+Mỗi phút ghi một dòng CSV: FPS từng camera, tốc độ bộ phát hiện, CPU/RAM từng container,
+số sự cố trong DB, số lần Frigate mất luồng. Cuối buổi in tổng kết và tự kết luận đạt hay
+chưa đạt tiêu chí "chạy liên tục ≥ 8 giờ, tự kết nối lại khi mất luồng".
+
+Chạy kèm module và cầu nối Telegram thì mới đúng cảnh thật:
+
+```powershell
+.venv\Scripts\python.exe -m safety.mqtt_bridge              # cửa sổ 1
+.venv\Scripts\python.exe -m safety.cli --source rtsp://127.0.0.1:8554/xuong_han --camera xuong_han   # cửa sổ 2
+.venv\Scripts\python.exe scripts\do_on_dinh.py --gio 8      # cửa sổ 3
+```
+
+Nhớ tắt chế độ ngủ của Windows trước khi chạy qua đêm.
+
 ## Lệnh hay dùng
 
 ```powershell

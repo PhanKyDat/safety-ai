@@ -160,7 +160,8 @@ for r in rows:
             if anh and not anh.is_absolute():
                 anh = GOC / anh
             if anh and anh.is_file():
-                st.image(str(anh), use_container_width=True)
+                # width="stretch" thay cho use_container_width (Streamlit sẽ bỏ tham số cũ)
+                st.image(str(anh), width="stretch")
             else:
                 st.caption("Không có ảnh")
         with phai:
