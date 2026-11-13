@@ -121,3 +121,19 @@ lóa nhòe (bokeh), sân chơi nhiều màu. Video có lửa gồm cháy rừng,
 Ba việc rút ra: (1) luật ngã cần video góc cao của nhóm trước khi chỉnh ngưỡng; (2) mô hình cháy
 cần thêm ảnh nền có đèn (đèn pha, đèn trần, đèn lóa), cỏ khô, lau sậy; (3) cần thêm ảnh khói
 trong nhà và lửa nhỏ ở xa. Hai việc sau thuộc phần train lại mô hình.
+
+## Bản v2 của mô hình (Trường train 12/11, chấm 13/11)
+
+Trường fine-tune tiếp từ v1: PPE thêm 2.862 ảnh SHWD và `hsv_h=0.05`; cháy thêm 376 ảnh nền ExDark
+(ảnh mô hình v1 báo nhầm, đã loại ảnh có lửa thật). Video `test_*` không dùng để train.
+
+| | v1 | v2 |
+|---|---|---|
+| Lửa (FIRESENSE): báo nhầm trên video dễ nhầm | 4 lần / 3 video | **2 lần** |
+| Lửa: P / R / F1 | 71,4% / 90,9% / 80,0% | **83,3%** / 90,9% / **87,0%** |
+| Lửa: AUROC / AUPRC | 0,89 / 0,88 | 0,91 / 0,89 |
+| Khói (FIRESENSE): bắt / nhầm / F1 | 12/13, 0, 96,0% | 12/13, 0, 96,0% (không đổi) |
+| SHWD val (1.517 ảnh, không dùng train): mAP50 `no_helmet` / `helmet` | 0,24 / 0,49 | **0,74 / 0,79** |
+
+Trên tập test cố định của Trường, cháy v2 gần như bằng v1 (mAP50 0,76 → 0,755): dữ liệu thêm vào
+nhắm vào báo nhầm do đèn, đúng thứ FIRESENSE đo được ở trên.
