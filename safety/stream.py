@@ -199,9 +199,12 @@ class MultiSource:
     tệp nào hết thì vắng mặt; chạy lại cho ra đúng kết quả cũ như FrameSource.
     """
 
-    def __init__(self, sources: Mapping[str, str | int], target_fps: float = DEFAULT_FPS, **source_kw):
+    def __init__(self, sources: Mapping[str, str | int], target_fps: float = DEFAULT_FPS,
+                 loop: bool = False, **source_kw):
         if not sources:
             raise ValueError("Cần ít nhất một camera")
+        # Chỉ áp cho tệp: tệp nào hết thì mở lại từ đầu, độc lập với các tệp khác (demo phát lặp).
+        self.loop = loop
         self.interval = 1.0 / target_fps if target_fps > 0 else 0.0
         self.sources = {cam: FrameSource(url, target_fps=target_fps, **source_kw)
                         for cam, url in sources.items()}
@@ -232,6 +235,10 @@ class MultiSource:
                 batch = []
                 for cam, it in list(iters.items()):
                     item = next(it, None)
+                    if item is None and self.loop:
+                        log.info("Camera %s hết video, phát lại từ đầu", cam)
+                        iters[cam] = iter(self.sources[cam])
+                        item = next(iters[cam], None)
                     if item is None:
                         del iters[cam]
                         continue

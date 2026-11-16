@@ -32,6 +32,18 @@ def test_tep_video_doc_song_song_tep_ngan_het_thi_vang_mat(tmp_path):
     assert np.allclose(np.diff(ts_a), 0.2)
 
 
+def test_lap_lai_moi_tep_tu_phat_lai_rieng(tmp_path):
+    """Demo: tệp ngắn hết thì tự phát lại, không đứng chờ tệp dài; không bao giờ tự dừng."""
+    a = make_video(tmp_path / "a.mp4", 10)
+    b = make_video(tmp_path / "b.mp4", 4)
+    it = iter(MultiSource({"a": a, "b": b}, target_fps=5.0, loop=True))
+    batches = [next(it) for _ in range(25)]
+    assert all([cam for cam, _, _ in bt] == ["a", "b"] for bt in batches)
+    # b dài 4 khung: khung thứ 5 của b là khung đầu tiên phát lại
+    b_vals = [int(f.mean()) for bt in batches for cam, _, f in bt if cam == "b"]
+    assert b_vals[4] == b_vals[0] and b_vals[8] == b_vals[0]
+
+
 def test_chay_lai_tep_cho_ra_cung_ket_qua(tmp_path):
     a = make_video(tmp_path / "a.mp4", 6)
     b = make_video(tmp_path / "b.mp4", 6, value=100)

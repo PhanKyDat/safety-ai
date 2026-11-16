@@ -71,6 +71,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--max-frames", type=int, default=0, help="Số lượt (mỗi lượt một khung mỗi camera), 0 = chạy mãi")
     p.add_argument("--json", action="store_true", help="In FrameResult dạng JSON mỗi dòng")
     p.add_argument("--show", action="store_true", help="Mở cửa sổ xem trực tiếp, nhấn Q để dừng sớm")
+    p.add_argument("--toc-do-that", action="store_true", dest="real_time",
+                   help="Nguồn là tệp video: chạy đúng tốc độ thật thay vì nhanh hết mức (để xem/quay demo)")
+    p.add_argument("--lap-lai", action="store_true", dest="loop",
+                   help="Nguồn là tệp video: hết video thì phát lại từ đầu, chạy tới khi bấm Q/Ctrl+C")
     p.add_argument("--frigate", default=None,
                    help="Địa chỉ API Frigate, vd http://127.0.0.1:5000/api. Bỏ trống = không gửi")
     p.add_argument("--snapshots", default="snapshots", help="Thư mục lưu ảnh sự cố")
@@ -128,7 +132,23 @@ def main(argv: list[str] | None = None) -> int:
     if getattr(pipeline.model, "task", None) != "pose":
         log.warning("Mô hình %s không có điểm khớp: luật ngã sẽ không báo gì "
                     "(dùng --model yolo26n-pose.pt)", args.model)
-    source = MultiSource(cams, target_fps=args.fps)
+    holder = {"src": MultiSource(cams, target_fps=args.fps, loop=args.loop)}
+
+    def batches():
+        """Lô khung từ nguồn; với tệp video thì có thể chạy đúng tốc độ thật (mỗi lô cách
+        nhau 1/fps giây theo đồng hồ, vì mỗi lô là 1/fps giây video của mọi camera)."""
+        src = holder["src"]
+        pace = args.real_time and not src.live and args.fps > 0
+        wall0 = None
+        for n, batch in enumerate(src):
+            if pace:
+                if wall0 is None:
+                    wall0 = time.time()
+                delay = wall0 + n / args.fps - time.time()
+                if delay > 0:
+                    time.sleep(delay)
+            yield batch
+
     outputs = build_outputs(args.frigate, list(cams), telegram=args.telegram,
                             telegram_when=at_most(args.telegram_max) if args.telegram_max > 0 else None,
                             db_path=db_path(args.db))
@@ -152,7 +172,7 @@ def main(argv: list[str] | None = None) -> int:
     frame_at: list[float] = []
 
     try:
-        for batch in source:
+        for batch in batches():
             if not rounds:
                 started = time.time()
             frame_at.append(time.time())
@@ -196,7 +216,7 @@ def main(argv: list[str] | None = None) -> int:
             import cv2
 
             cv2.destroyAllWindows()
-        source.close()
+        holder["src"].close()
         outputs.close()
 
     elapsed = time.time() - started if rounds else 0.0
