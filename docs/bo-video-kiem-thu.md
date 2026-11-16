@@ -31,6 +31,11 @@ Mỗi đoạn nên có **5 giây đầu không có người** để Frigate kị
 | `khong_mu` | Không đội mũ, đứng/đi trong khung **≥ 10 s** | 2–3 đoạn | B1, recall thiếu mũ |
 | `khong_ao` | Không mặc áo phản quang **≥ 10 s** | 2 đoạn | Recall thiếu áo |
 | `nga` | Ngã rồi **nằm yên ≥ 5 s** — ngã lên nệm | 2–3 đoạn | Recall ngã |
+
+Đã quay (16/11): `test_nga_01_dem` (ngửa), `test_nga_02_dem` (nghiêng), `test_nga_03_dem` (sấp), máy
+cao chúi xuống, đứng yên. Lệch so với bảng trên: quay **dọc** 720×1280, dài 12–15 s (dưới 20 s), nằm
+yên 7–9 s, không có 5 s đầu trống. Đủ để soi luật ngã (kết quả: `docs/doi-chieu.md` mục 3); lần quay
+sau nên quay ngang, ≥ 20 s, nằm ≥ 10 s, và thêm cảnh ngồi xổm / cúi nhặt đồ để đo báo nhầm.
 | `vung_nguy_hiem` | Đi vào và đứng trong vùng đã vẽ | 2 đoạn | Vùng nguy hiểm |
 | `bay_ao_cam` | Mặc áo cam/vàng **thường** (không phải áo phản quang) | 1–2 đoạn | Báo nhầm |
 | `bay_mu_luoi_trai` | Đội mũ lưỡi trai, mũ len | 1–2 đoạn | Báo nhầm |
