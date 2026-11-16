@@ -97,17 +97,19 @@ def db_path(arg: str | None) -> str | None:
     return os.environ.get("INCIDENT_DB", "").strip() or DEFAULT_DB
 
 
-def draw(frame, result, title: str = "safety-ai"):
+def draw(image, title: str = "safety-ai"):
+    """Hiện một khung đã vẽ sẵn (safety.hien_thi.Overlay). Trả về True khi người xem bấm Q."""
     import cv2
 
-    for d in result.detections:
-        x1, y1, x2, y2 = (int(v) for v in d.bbox.to_list())
-        cv2.rectangle(frame, (x1, y1), (x2, y2), (76, 175, 80), 2)
-        text = f"{d.cls.value}#{d.track_id} {d.conf:.2f}"
-        cv2.putText(frame, text, (x1, max(14, y1 - 6)),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.45, (76, 175, 80), 1, cv2.LINE_AA)
-    cv2.imshow(title, frame)
+    cv2.imshow(title, image)
     return cv2.waitKey(1) & 0xFF == ord("q")
+
+
+def model_label(model: str, extra: list[str]) -> str:
+    """Tên ngắn các mô hình để in lên khung hình, vd 'yolo26n-pose + ppe_v2 + fire_v2'."""
+    from pathlib import Path
+
+    return " + ".join(Path(m).stem.replace("_best", "") for m in [model, *extra])
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -133,6 +135,12 @@ def main(argv: list[str] | None = None) -> int:
     ppe = PPEConfig(infer_missing=not args.khong_vang_mat)
     processors = {cam: IncidentProcessor(cam, publisher=outputs, snapshot_dir=args.snapshots, ppe=ppe)
                   for cam in cams}
+    overlays = {}
+    if args.show:
+        from safety.hien_thi import Overlay
+
+        label = model_label(args.model, args.extra_model)
+        overlays = {cam: Overlay(cam, label) for cam in cams}
     log.info("Chạy %d camera: %s", len(cams), ", ".join(f"{c}={u}" for c, u in cams.items()))
 
     seen_tracks: dict[str, set[int]] = {cam: set() for cam in cams}
@@ -163,14 +171,22 @@ def main(argv: list[str] | None = None) -> int:
                 else:
                     print(_summarise(frames[cam], result, cam if multi else None))
 
+                shown = frame.copy() if args.show else None   # ảnh sự cố chụp trên khung sạch
                 for incident in processors[cam].handle(frame, result):
                     incidents += 1
                     log.warning("SỰ CỐ %s/%s [%s] %s score %.2f, ảnh %s", cam, incident.label.value,
                                 incident.severity.vi, incident.sub_label or "", incident.score,
                                 incident.snapshot)
+                    if args.show:
+                        overlays[cam].add(incident)
 
-                if args.show and draw(frame, result, cam):
-                    stop = True
+                if args.show:
+                    recent_at = frame_at[-10:]
+                    fps = (len(recent_at) - 1) / (recent_at[-1] - recent_at[0]) if len(recent_at) > 2 else None
+                    ms = sorted(infer_ms[-10:])[len(infer_ms[-10:]) // 2]
+                    image = overlays[cam].render(shown, result, processors[cam], fps, ms)
+                    if draw(image, cam):
+                        stop = True
             if stop or (args.max_frames and rounds >= args.max_frames):
                 break
     except KeyboardInterrupt:
