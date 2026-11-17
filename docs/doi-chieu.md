@@ -4,7 +4,7 @@ Mục 6 của kế hoạch: module của nhóm thêm được gì so với Friga
 tài nguyên. Tài liệu này gom mọi số đo về một chỗ để cắt thẳng vào báo cáo cuối kỳ; ô nào ghi
 **chưa đo** là còn chờ, kèm người phụ trách.
 
-Cập nhật lần cuối: 17/11 (tuần 11): B4 có module, lần chạy dài thứ nhất.
+Cập nhật lần cuối: 17/11 (tuần 11): B1 đã đo, B4 có module, lần chạy dài thứ nhất.
 
 ## 1. So sánh tính năng (mục 6.1)
 
@@ -20,14 +20,30 @@ Cập nhật lần cuối: 17/11 (tuần 11): B4 có module, lần chạy dài t
 
 ## 2. B1 — Không đội mũ: Object Classification của Frigate so với module
 
-| | Frigate Object Classification | Module nhóm (cách vắng mặt) |
+| | Frigate Object Classification (`mu_bao_ho`) | Module nhóm (cách vắng mặt, PPE v2) |
 |---|---|---|
-| Recall thiếu mũ | **chưa đo** — model đã huấn luyện 11/11, chờ Trường đo trên `test_*` | 8/8 khoảng vi phạm (100%) |
-| Precision | **chưa đo** | 100% (0 báo nhầm) |
-| Bộ đo | 12 video: 10 đoạn tự quay góc cao (7 ban ngày 1 người, 3 ban đêm 2 người) + 2 video kho | |
+| Bắt được thiếu mũ (recall) | **2/8 khoảng vi phạm (25%)** | **6/8 (75%)**; bản PPE v1 tuần 9: 8/8 |
+| Báo nhầm / precision | 0 báo nhầm, P 100% | 0 báo nhầm, P 100% |
+| F1 | 40,0% | 85,7% |
+| Bộ đo | 12 video: 10 đoạn tự quay góc cao (7 ban ngày 1 người, 3 ban đêm 2 người) + 2 video kho; cùng đáp án, cùng cách chấm (dung sai báo muộn 5 s) | |
 
-Cách chạy: `docs/doi-chung-b1.md`. Số của module: `scripts/evaluate_videos.py` (mặc định đã dùng
-cách vắng mặt), kết quả `runs/eval/tuan9_tat_ca`.
+Đo 17/11 trên laptop Đạt bằng `scripts/cham_b1.py` (cách dựng nằm ở đầu script): ghép 12 video
+thành một, phát một lượt vào camera `b1` của Frigate (detect 640x360, 5 khung/s, bật
+`mu_bao_ho`), rồi đổi giờ từng sự kiện về giây trong video và chấm bằng đúng hàm chấm của module.
+Thời điểm báo của Frigate lấy theo lúc lượt bám vết chồng lên khoảng vi phạm, tức là có lợi cho
+Frigate (không tính độ trễ). Số của module: `scripts/evaluate_videos.py`, `runs/eval/nga_chot`.
+
+Vì sao Frigate sót 6/8 (15 lượt bám vết: 10 `co_mu`, 2 `khong_mu`, 3 chưa phân loại):
+
+* **Gán một nhãn cho cả lượt bám vết.** Ở 3 đoạn ban ngày người đội mũ đi vào rồi mới tháo
+  mũ; Frigate đã gán `co_mu` từ đầu và giữ nguyên, nên không bao giờ ra `khong_mu`. Module xét
+  từng khung nên bắt được lúc tháo mũ. Đây là khác biệt về cách làm, không phải do model kém.
+* **Không thấy người thì không phân loại.** Ở `test_khong_mu_03`, `xuong_han` và `goc`, bộ
+  phát hiện mặc định của Frigate không ra lượt bám vết người nào (góc cao, người nhỏ), nên
+  không có gì để phân loại.
+* Hai đoạn bắt được là ban đêm, người bỏ mũ từ đầu lượt bám vết.
+
+Cách chạy cũ (đếm, ghép với module, chưa chấm điểm): `docs/doi-chung-b1.md`.
 
 **Model Frigate đã huấn luyện (11/11):** 149 ảnh `co_mu` + 107 ảnh `khong_mu`, lấy từ video
 Pexels và video kho, **không lấy từ `test_*`**. Kiểm tra sơ bộ trên 3 đoạn chưa dùng để huấn
