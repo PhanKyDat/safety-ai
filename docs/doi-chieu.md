@@ -108,7 +108,12 @@ bộ phát hiện **CPU**, mỗi mức lấy 9 mẫu trong 3 phút sau khi chờ
 | Frigate thuần: GPU | 0 (bộ phát hiện chạy CPU) | 0 | 0 |
 | Thời gian một lần phát hiện | 12,6 ms | 13,2 ms | 13,7 ms |
 | FPS trung bình các camera | 5,04 | 4,44 | 4,26 |
-| Frigate + module: CPU, GPU, RAM | **chưa đo** (cần chạy module cùng lúc trên một máy) | **chưa đo** | **chưa đo** |
+| Frigate + module: CPU, GPU, RAM | **chưa đo** — Đạt đo trên laptop Đạt | **chưa đo** | **chưa đo** |
+
+Cột "Frigate + module" Đạt đo trên laptop của Đạt, **đo lại cả Frigate thuần lẫn có module trên
+cùng máy đó** cho công bằng (`scripts/do_b4.py` rồi `scripts/do_b4.py --module --extra-model
+models\ppe_v2_best.pt --extra-model models\fire_v2_best.pt`). Bảng Frigate thuần ở trên (máy Uy)
+vẫn giữ trong báo cáo, ghi rõ là máy khác.
 
 Đọc số này ra sao:
 
@@ -134,4 +139,4 @@ Chỗ nghẽn của module là CPU giải mã video (8 luồng 720p tốn 22% CP
 | Báo nhầm mỗi giờ video mỗi camera | Ghi số đo thật | Đồ bảo hộ 10,8/giờ trên 12 video (1 lần trong 334 s); lửa 15,7/giờ trên FIRESENSE | Đã có số |
 | Độ trễ tới Frigate / Telegram | ≤ 5 s | Trung vị 3,9 s (thiếu áo), 5,8 s (thiếu mũ) = luật + ~0,5 s hạ tầng | Thiếu áo đạt; thiếu mũ vượt 0,8 s, do 3 s luật cố ý chờ (mục 4) |
 | Số camera chạy đồng thời | Ghi số đo thật | 8 camera ở 4,46 khung/giây (mục tiêu 5) trên laptop; 4 camera đạt | Đã có số |
-| Chạy liên tục không lỗi | ≥ 8 giờ, tự nối lại khi mất luồng | **chưa chạy** (Uy + Đạt) | Chờ |
+| Chạy liên tục không lỗi | ≥ 8 giờ, tự nối lại khi mất luồng | **chưa chạy** — Đạt chạy trên laptop Đạt bằng `do_on_dinh.py --gio 8 --thu-ngat-moi 2` (lệnh đủ trong `docs/frigate-setup.md`) | Chờ |
