@@ -4,7 +4,7 @@ Mục 6 của kế hoạch: module của nhóm thêm được gì so với Friga
 tài nguyên. Tài liệu này gom mọi số đo về một chỗ để cắt thẳng vào báo cáo cuối kỳ; ô nào ghi
 **chưa đo** là còn chờ, kèm người phụ trách.
 
-Cập nhật lần cuối: 11/11 (tuần 10).
+Cập nhật lần cuối: 17/11 (tuần 11): B4 có module, lần chạy dài thứ nhất.
 
 ## 1. So sánh tính năng (mục 6.1)
 
@@ -88,7 +88,7 @@ bộ phát hiện **CPU**, mỗi mức lấy 9 mẫu trong 3 phút sau khi chờ
 | Frigate thuần: GPU | 0 (bộ phát hiện chạy CPU) | 0 | 0 |
 | Thời gian một lần phát hiện | 12,6 ms | 13,2 ms | 13,7 ms |
 | FPS trung bình các camera | 5,04 | 4,44 | 4,26 |
-| Frigate + module: CPU, GPU, RAM | **chưa đo** (cần chạy module cùng lúc trên một máy) | **chưa đo** | **chưa đo** |
+| Frigate + module | đo trên laptop Đạt, xem bảng 5b | | |
 
 Đọc số này ra sao:
 
@@ -105,6 +105,38 @@ lấy mẫu, xong trả lại cấu hình cũ). Kết quả thô: `data/b4_2026-
 
 Chỗ nghẽn của module là CPU giải mã video (8 luồng 720p tốn 22% CPU), không phải GPU.
 
+### 5b. Frigate thuần so với Frigate + module, cùng một máy (17/11)
+
+Laptop Đạt: i5-11400H (12 luồng = 1200%), 16 GB RAM, RTX 3050 Ti 4 GB; Frigate 0.17.2 trong
+Docker, bộ phát hiện CPU; module dùng mô hình tư thế + PPE v2 + cháy v2. Hai lượt chạy liền
+nhau sáng 17/11 bằng `scripts/do_b4.py` (có và không `--module`), mỗi mức 11 mẫu trong 3 phút.
+
+| | 1 camera | 4 camera | 8 camera |
+|---|---|---|---|
+| Frigate thuần: CPU Frigate (đỉnh) | 82% (96%) | 121% (152%) | 138% (174%) |
+| Frigate thuần: RAM Frigate | 746 MB | 1146 MB | 1517 MB |
+| Có module: CPU Frigate (đỉnh) | 87% (100%) | 130% (174%) | 204% (265%) |
+| Có module: CPU module | 46% | 110% | 200% |
+| Có module: RAM module | 1577 MB | 1846 MB | 2194 MB |
+| Có module: GPU / VRAM cả card | 35% / 668 MB | 38% / 660 MB | 38% / 876 MB |
+| Có module: nhịp module mỗi camera | 4,88 khung/s | 4,98 khung/s | 4,96 khung/s |
+| Có module: thời gian một lô | 74 ms | 107 ms | 142 ms |
+| CPU cả hệ (Frigate + máy giả lập [+ module]) | 116% → 169% | 156% → 278% | 170% → 449% |
+
+Đọc số:
+
+* Module giữ đủ ~5 khung/giây cho **cả 8 camera** (mục tiêu 5); card 4 GB dùng chưa tới 1 GB.
+* Thêm module tốn khoảng **25 điểm % CPU mỗi camera** (≈ 2% của 12 luồng), phần lớn là giải
+  mã video. 8 camera cả hệ dùng ~449% = khoảng 37% sức CPU của laptop.
+* CPU Frigate ở mức 8 camera tăng 138% → 204% khi có module, vì module đọc 8 luồng qua bộ phát
+  lại (go2rtc) của Frigate và Frigate phải nhận, lưu sự cố module đẩy vào.
+* Lượt đo Frigate thuần tối 16/11 trên cùng laptop ra số gần gấp đôi (CPU 171/220/367%,
+  phát hiện 21–33 ms thay vì 11 ms) vì máy đang bận việc khác (Visual Studio tự cập nhật);
+  đã đo lại, giữ bản cũ ở `data/b4_laptop_frigate_thuan_may_ban.csv` để đối chiếu. Bài học:
+  so có/không module phải đo liền nhau trong cùng điều kiện.
+
+Kết quả thô: `data/b4_laptop_frigate_thuan.csv`, `data/b4_laptop_co_module.csv`.
+
 ## 6. Tiêu chí đánh giá (mục 9 của kế hoạch)
 
 | Chỉ số | Mục tiêu | Hiện tại | Đạt? |
@@ -113,5 +145,5 @@ Chỗ nghẽn của module là CPU giải mã video (8 luồng 720p tốn 22% CP
 | Recall lửa / ngã trên video kiểm thử | ≥ 0,90 | lửa 0,91 (10/11); ngã 0,27 (8/30, UR Fall) | Lửa đạt, ngã chưa |
 | Báo nhầm mỗi giờ video mỗi camera | Ghi số đo thật | Đồ bảo hộ 10,8/giờ trên 12 video (1 lần trong 334 s); lửa 15,7/giờ trên FIRESENSE | Đã có số |
 | Độ trễ tới Frigate / Telegram | ≤ 5 s | Trung vị 3,9 s (thiếu áo), 5,8 s (thiếu mũ) = luật + ~0,5 s hạ tầng | Thiếu áo đạt; thiếu mũ vượt 0,8 s, do 3 s luật cố ý chờ (mục 4) |
-| Số camera chạy đồng thời | Ghi số đo thật | 8 camera ở 4,46 khung/giây (mục tiêu 5) trên laptop; 4 camera đạt | Đã có số |
-| Chạy liên tục không lỗi | ≥ 8 giờ, tự nối lại khi mất luồng | **chưa chạy** (Uy + Đạt) | Chờ |
+| Số camera chạy đồng thời | Ghi số đo thật | 8 camera chạy cùng Frigate: module 4,96 khung/giây mỗi camera (mục tiêu 5), CPU cả hệ ~37% laptop (mục 5b, 17/11) | Đạt |
+| Chạy liên tục không lỗi | ≥ 8 giờ, tự nối lại khi mất luồng | Lần 1 (16–17/11, 4 camera + module): 5,7 giờ rồi dừng do chốt ổ đĩa; trong 5,7 giờ Frigate trả lời 329/329 lần, module không lần nào chết, 6 lần mất luồng (2 cố ý) đều tự nối lại. Dừng vì luật báo lặp trên video lặp (11.487 sự cố) — đã sửa (commit 4950f01). Chạy lại đêm 17/11 | Chờ lần 2 |
