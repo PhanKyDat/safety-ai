@@ -58,6 +58,14 @@ class PPEConfig:
     # Cố ý hẹp: không nhận diện lại được người, gộp rộng hơn thì người khác đi vào sẽ bị sót.
     reentry_window: float = 10.0
     reentry_distance: float = 1.0
+    # Gộp thêm "cùng chỗ đã báo": trong thời gian chờ, người vi phạm cùng loại mà khung người
+    # trùng ≥ `same_spot_iou` (IoU) với khung lúc báo của một sự cố trước thì coi là cùng sự
+    # cố, dù mất mã lâu hơn `reentry_window`. Chạy 8 giờ 16–17/11 trên video giả lập lặp
+    # 17 s: mỗi vòng lặp người có mã mới và xuất hiện lại ở chỗ cũ, chỉ có luật trên thì ra
+    # 11.487 sự cố/5,7 giờ (~2.000/giờ) và đầy ổ. IoU 0,5 để hai người đứng cạnh nhau (khung
+    # không chồng nhau) vẫn bị báo riêng. Chỉ gộp với sự cố mà mã của nó lúc này không còn
+    # vi phạm cùng loại (đã mất, hoặc mã đã sang người khác đang tuân thủ khi hai người đi chéo).
+    same_spot_iou: float = 0.5
 
 
 # Mũ xét trong vùng đầu; áo phản quang xét trên cả khung người.
@@ -84,6 +92,7 @@ class _Streak:
     last_hit: float | None = None
     last_alert: float | None = None
     score: float = 0.0
+    first_box: BBox | None = None   # khung người lúc bắt đầu đếm
 
 
 @dataclass
@@ -93,8 +102,17 @@ class _Alerted:
     track_id: int
     label: IncidentLabel
     alert_ts: float
-    last_seen: float
-    box: BBox
+    last_seen: float    # lần cuối mã này còn vi phạm loại này
+    box: BBox           # khung lúc đó
+    alert_box: BBox     # khung lúc báo
+
+
+def _iou(a: BBox, b: BBox) -> float:
+    w = max(0.0, min(a.x2, b.x2) - max(a.x1, b.x1))
+    h = max(0.0, min(a.y2, b.y2) - max(a.y1, b.y1))
+    inter = w * h
+    union = a.width * a.height + b.width * b.height - inter
+    return inter / union if union > 0 else 0.0
 
 
 def _near(a: BBox, b: BBox, factor: float) -> bool:
@@ -119,31 +137,43 @@ class PPERule:
     def update(self, frame: FrameResult) -> list[Incident]:
         incidents: list[Incident] = []
         people = [d for d in frame.detections if d.cls is DetectClass.PERSON and d.track_id is not None]
-        visible = {p.track_id for p in people}
-        for p in people:
-            for a in self._alerted:
-                if a.track_id == p.track_id:
-                    a.last_seen, a.box = frame.ts, p.bbox
+        checks = []
+        busy: dict[IncidentLabel, set[int]] = {label: set() for label, *_ in _CHECKS}
         for person in people:
             for label, ok_cls, bad_cls, head_only in _CHECKS:
                 violating = self._violating(person, frame, ok_cls, bad_cls, head_only)
-                incident = self._advance(person, label, frame.ts, violating, visible)
-                if incident is not None:
-                    incidents.append(incident)
+                checks.append((person, label, violating))
+                if violating is not None and violating is not False:
+                    busy[label].add(person.track_id)
+        for person, label, _ in checks:
+            if person.track_id in busy[label]:
+                for a in self._alerted:
+                    if a.track_id == person.track_id and a.label is label:
+                        a.last_seen, a.box = frame.ts, person.bbox
+        for person, label, violating in checks:
+            incident = self._advance(person, label, frame.ts, violating, busy[label])
+            if incident is not None:
+                incidents.append(incident)
         self._prune(frame.ts)
         return incidents
 
     def _same_as_alerted(self, person: Detection, label: IncidentLabel, ts: float,
-                         visible: set[int]) -> _Alerted | None:
-        """Người vừa bị báo, mất mã chưa lâu và hiện lại ngay gần chỗ cũ."""
+                         busy: set[int], first_box: BBox | None = None) -> _Alerted | None:
+        """Sự cố trước (cùng loại, còn trong thời gian chờ, mã của nó không còn vi phạm) mà
+        người này rất có thể chính là người đó:
+        - mất mã chưa lâu và hiện lại gần chỗ cuối cùng thấy (lúc bắt đầu đếm hoặc bây giờ), hoặc
+        - đang đứng đúng chỗ đã bị báo (khung trùng ≥ `same_spot_iou`)."""
         cfg = self.config
-        if cfg.reentry_window <= 0:
+        if cfg.reentry_window <= 0 and cfg.same_spot_iou <= 0:
             return None
         for a in self._alerted:
-            if (a.label is label and a.track_id not in visible
-                    and ts - a.last_seen <= cfg.reentry_window
-                    and ts - a.alert_ts < cfg.cooldown
-                    and _near(a.box, person.bbox, cfg.reentry_distance)):
+            if a.label is not label or a.track_id in busy or ts - a.alert_ts >= cfg.cooldown:
+                continue
+            if cfg.reentry_window > 0 and ts - a.last_seen <= cfg.reentry_window and (
+                    _near(a.box, person.bbox, cfg.reentry_distance)
+                    or (first_box is not None and _near(a.box, first_box, cfg.reentry_distance))):
+                return a
+            if cfg.same_spot_iou > 0 and _iou(a.alert_box, person.bbox) >= cfg.same_spot_iou:
                 return a
         return None
 
@@ -209,7 +239,7 @@ class PPERule:
 
     def _advance(
         self, person: Detection, label: IncidentLabel, ts: float, violating,
-        visible: set[int] = frozenset(),
+        busy: set[int] = frozenset(),
     ) -> Incident | None:
         track_id = person.track_id
         key = (track_id, label)
@@ -222,6 +252,7 @@ class PPERule:
         streak = self._streaks.setdefault(key, _Streak())
         if streak.since is None or (ts - streak.last_hit) > self.config.gap_tolerance:
             streak.since = ts
+            streak.first_box = person.bbox
         streak.last_hit = ts
         streak.score = violating.conf
 
@@ -229,14 +260,14 @@ class PPERule:
             return None
         if streak.last_alert is not None and ts - streak.last_alert < self.config.cooldown:
             return None
-        earlier = self._same_as_alerted(person, label, ts, visible)
+        earlier = self._same_as_alerted(person, label, ts, busy, streak.first_box)
         if earlier is not None:
             # Cùng người, mã mới: nhận lại thời điểm báo cũ để cooldown chạy tiếp như một người.
             streak.last_alert = earlier.alert_ts
             earlier.track_id, earlier.last_seen, earlier.box = track_id, ts, person.bbox
             return None
         streak.last_alert = ts
-        self._alerted.append(_Alerted(track_id, label, ts, ts, person.bbox))
+        self._alerted.append(_Alerted(track_id, label, ts, ts, person.bbox, person.bbox))
         return Incident(
             camera=self.camera,
             label=label,

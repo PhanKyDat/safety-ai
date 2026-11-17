@@ -241,12 +241,48 @@ def test_nguoi_khac_o_cho_khac_van_bi_bao():
 
 
 def test_mat_ma_lau_hon_cua_so_thi_tinh_nguoi_moi():
+    """Mất mã quá cửa sổ và hiện lại ở chỗ khác chỗ đã báo: người mới."""
     rule = PPERule("xuong_han", PPEConfig(reentry_window=10.0))
-    frames = violating_frames(1, 0.0, 5) + violating_frames(2, 20.0, 6)
+    frames = violating_frames(1, 0.0, 5) + violating_frames(2, 20.0, 6, dx=150)
     assert [i.track_id for i in run(rule, frames)] == [1, 2]
 
 
 def test_tat_chong_trung_thi_bao_theo_tung_ma():
-    rule = PPERule("xuong_han", PPEConfig(reentry_window=0))
+    rule = PPERule("xuong_han", PPEConfig(reentry_window=0, same_spot_iou=0))
     frames = violating_frames(1, 0.0, 5) + violating_frames(2, 6.0, 6)
     assert [i.track_id for i in run(rule, frames)] == [1, 2]
+
+
+def test_video_lap_hien_lai_dung_cho_da_bao_thi_khong_bao_lai():
+    """Chạy 8 giờ 16–17/11: video lặp 17 s, mỗi vòng người mang mã mới ở đúng chỗ cũ."""
+    rule = PPERule("xuong_han")
+    frames = violating_frames(1, 0.0, 5) + violating_frames(2, 20.0, 5) + violating_frames(3, 40.0, 5)
+    assert [i.track_id for i in run(rule, frames)] == [1]
+
+
+def test_cung_cho_nhung_het_thoi_gian_cho_thi_bao_lai():
+    rule = PPERule("xuong_han")
+    frames = violating_frames(1, 0.0, 5) + violating_frames(2, 70.0, 5)
+    assert [i.track_id for i in run(rule, frames)] == [1, 2]
+
+
+def test_hai_nguoi_dung_canh_nhau_bao_rieng():
+    """Khung không chồng nhau (IoU 0) thì không gộp, kể cả người kia vừa bị báo ngay cạnh."""
+    rule = PPERule("xuong_han")
+    frames = [frame(t / 5,
+                    person_at(1), at(DetectClass.NO_HELMET, BBox(110, 110, 190, 160)),
+                    person_at(2, 100), at(DetectClass.NO_HELMET, BBox(210, 110, 290, 160)))
+              for t in range(25)]
+    assert sorted(i.track_id for i in run(rule, frames)) == [1, 2]
+
+
+def test_hai_nguoi_di_cheo_ma_cu_sang_nguoi_tuan_thu_thi_khong_bao_lai():
+    """Đi chéo nhau: mã 1 nhảy sang người đội mũ, người bị báo mang mã mới 3 ở chỗ cũ.
+    Trước đây mã 1 vẫn 'đang thấy' nên không gộp và báo lại lần hai."""
+    rule = PPERule("xuong_han")
+    truoc = violating_frames(1, 0.0, 5)
+    sau = [frame(5.0 + t / 5,
+                 person_at(3), at(DetectClass.NO_HELMET, BBox(110, 110, 190, 160)),
+                 person_at(1, 300), at(DetectClass.HELMET, BBox(410, 110, 490, 160)))
+           for t in range(25)]
+    assert [i.track_id for i in run(rule, truoc + sau)] == [1]
