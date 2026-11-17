@@ -29,7 +29,11 @@ LYING_NO_FEET = pose((100, 280), (180, 285))            # chân bị kệ che
 HIDDEN = pose((100, 280), (180, 285), conf=0.1)         # không thấy rõ vai, hông
 
 
-def person(kps, box=BBox(90, 100, 270, 300), track_id=1):
+TALL = BBox(120, 100, 200, 300)    # khung người đứng: rộng/cao 0,4
+WIDE = BBox(90, 100, 270, 300)     # khung bè: rộng/cao 0,9
+
+
+def person(kps, box=TALL, track_id=1):
     return Detection(DetectClass.PERSON, box, 0.88, track_id=track_id, keypoints=kps)
 
 
@@ -71,14 +75,78 @@ def test_dung_va_cui_nhat_do_khong_bao():
     assert run(FallRule("xuong_han"), frames([BENDING] * 50)) == []
 
 
+# --- Điều kiện khung bè ngang (17/11, video ngã góc cao của nhóm) ---
+
+# Nằm dọc hướng nhìn của camera góc cao: thân bị co ngắn nên trên ảnh gần như thẳng đứng (3°).
+FORESHORTENED = pose((150, 200), (152, 240), (154, 280))
+
+
+LOW_WIDE = BBox(90, 200, 270, 300)   # người đã nằm: khung bè, cao 100 (lúc đứng cao 200)
+
+
+def nga_tai_cho(lying_box=LOW_WIDE, lying=FORESHORTENED, n=16, dx_moi_khung=0.0):
+    """Đứng 2 s (khung TALL) rồi ngã tại chỗ; dx_moi_khung > 0 là khung trôi đi (người đang đi)."""
+    seq = frames([STANDING] * 10)
+    for i in range(n):
+        b = BBox(lying_box.x1 + i * dx_moi_khung, lying_box.y1, lying_box.x2 + i * dx_moi_khung, lying_box.y2)
+        seq += frames([lying], start=T0 + 2.0 + i / 5, box=b)
+    return seq
+
+
+def test_nam_doc_huong_nhin_khung_be_thi_bao_nga():
+    """Góc thân chỉ 3° (co ngắn), nhưng khung bè, nằm yên và thấp hẳn so với lúc đứng ở đó."""
+    assert run(FallRule("xuong_han"), frames([FORESHORTENED] * 16)) == []          # khung đứng
+    assert len(run(FallRule("xuong_han"), nga_tai_cho())) == 1
+
+
+def test_khung_be_nhung_dang_di_thi_khong_bao():
+    """Người đứng sát mép / ngay dưới camera: khung bè nhưng đang đi (báo nhầm 17/11)."""
+    assert run(FallRule("xuong_han"), nga_tai_cho(dx_moi_khung=8.0, n=40)) == []
+
+
+def test_khung_be_cham_mep_anh_thi_khong_xet():
+    """Người đứng sát mép dưới bị cắt nửa người: khung thấp và bè như ngã (17/11)."""
+    assert run(FallRule("xuong_han"), nga_tai_cho(lying_box=BBox(90, 260, 270, 360))) == []
+
+
+def test_khung_be_dung_yen_nhung_khong_tut_chieu_cao_thi_khong_bao():
+    """Đứng yên với khung bè suốt từ đầu (không có lúc nào cao hơn ở chỗ đó)."""
+    assert run(FallRule("xuong_han"), frames([FORESHORTENED] * 40, box=WIDE)) == []
+
+
+def test_khung_be_nhung_khong_thay_ro_hong_thi_khong_bao():
+    """Người đi bị kệ che mất nửa thân: khung bè nhưng không thấy rõ hông."""
+    hidden_hips = list(FORESHORTENED)
+    hidden_hips[11] = hidden_hips[12] = Keypoint(152, 240, 0.4)
+    assert run(FallRule("xuong_han"), frames([tuple(hidden_hips)] * 30, box=WIDE)) == []
+
+
+def test_cui_nhat_do_khung_be_van_khong_bao():
+    """Nhìn ngang người cúi thì khung bè, nhưng thân ngang + chân đứng là cúi, không phải ngã."""
+    assert run(FallRule("xuong_han"), frames([BENDING] * 50, box=WIDE)) == []
+
+
+def test_tat_dieu_kien_khung_be():
+    cfg = FallConfig(wide_ratio=0)
+    assert run(FallRule("xuong_han", cfg), frames([FORESHORTENED] * 16, box=WIDE)) == []
+
+
 def test_khong_thay_chan_thi_dua_vao_than():
     assert len(run(FallRule("xuong_han"), frames([LYING_NO_FEET] * 16))) == 1
 
 
 def test_bi_che_mot_luc_khong_lam_mat_dong_ho():
-    """Không thấy rõ vai/hông thì chưa kết luận, không phải bằng chứng đã đứng dậy."""
-    seq = [LYING] * 8 + [HIDDEN] * 4 + [LYING] * 4                     # vẫn tới 3,0 s
-    assert len(run(FallRule("xuong_han"), frames(seq))) == 1
+    """Không thấy rõ vai/hông thì chưa kết luận, không phải bằng chứng đã đứng dậy: đồng hồ
+    không về 0, chỉ báo muộn hơn chút vì phải đủ 80% số khung thấy rõ đang nằm."""
+    seq = [LYING] * 8 + [HIDDEN] * 4 + [LYING] * 8                     # 12/16 khung ở 3,0 s
+    incidents = run(FallRule("xuong_han"), frames(seq))
+    assert len(incidents) == 1 and incidents[0].ts == T0 + 3.8         # 16/20 = 80%
+
+
+def test_lac_dac_vai_khung_nam_xen_khung_khong_ro_thi_khong_bao():
+    """Người cởi áo / dang tay: vài khung khung bè xen giữa khung không rõ vai hông (17/11)."""
+    seq = ([FORESHORTENED] + [HIDDEN] * 3) * 10                        # 25% khung "nằm", 8 s
+    assert run(FallRule("xuong_han"), frames(seq, box=WIDE)) == []
 
 
 def test_mat_dau_qua_lau_thi_dem_lai():
@@ -113,7 +181,7 @@ def test_su_co_nga_di_qua_bo_xu_ly_va_frigate_khoanh_nguoi(tmp_path):
     proc = IncidentProcessor("xuong_han", snapshot_dir=tmp_path, ppe=PPEConfig(infer_missing=False))
     image = np.zeros((360, 640, 3), dtype=np.uint8)
     out = []
-    for f in frames([LYING] * 16):
+    for f in frames([LYING] * 16, box=WIDE):
         out.extend(proc.handle(image, f))
     assert [i.label for i in out] == [IncidentLabel.FALL]
     assert out[0].snapshot.endswith("_fall_1789012343_id1.jpg")
