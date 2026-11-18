@@ -162,4 +162,29 @@ Kết quả thô: `data/b4_laptop_frigate_thuan.csv`, `data/b4_laptop_co_module.
 | Báo nhầm mỗi giờ video mỗi camera | Ghi số đo thật | Đồ bảo hộ 10,8/giờ trên 12 video (1 lần trong 334 s); lửa 15,7/giờ trên FIRESENSE | Đã có số |
 | Độ trễ tới Frigate / Telegram | ≤ 5 s | Trung vị 3,9 s (thiếu áo), 5,8 s (thiếu mũ) = luật + ~0,5 s hạ tầng | Thiếu áo đạt; thiếu mũ vượt 0,8 s, do 3 s luật cố ý chờ (mục 4) |
 | Số camera chạy đồng thời | Ghi số đo thật | 8 camera chạy cùng Frigate: module 4,96 khung/giây mỗi camera (mục tiêu 5), CPU cả hệ ~37% laptop (mục 5b, 17/11) | Đạt |
-| Chạy liên tục không lỗi | ≥ 8 giờ, tự nối lại khi mất luồng | Lần 1 (16–17/11, 4 camera + module): 5,7 giờ rồi dừng do chốt ổ đĩa; trong 5,7 giờ Frigate trả lời 329/329 lần, module không lần nào chết, 6 lần mất luồng (2 cố ý) đều tự nối lại. Dừng vì luật báo lặp trên video lặp (11.487 sự cố) — đã sửa (commit 4950f01). Chạy lại đêm 17/11 | Chờ lần 2 |
+| Chạy liên tục không lỗi | ≥ 8 giờ, tự nối lại khi mất luồng | **8,0 giờ** (17–18/11, laptop Đạt, 4 camera + module, mô hình v2): Frigate trả lời API 458/458 lần đo; module không lần nào ngừng; 4 lần cố ý ngắt camera + 4 lần tự rớt, **cả 8 lần tự nối lại**; FPS trung bình 4,1–5,5 mỗi camera. Xem mục 7 | **Đạt** |
+
+## 7. Chạy liên tục 8 giờ (17–18/11)
+
+Laptop Đạt (i5-11400H, RTX 3050 Ti 4 GB), Frigate 0.17.2 bộ phát hiện CPU, 4 camera giả lập
+(`xuong_han` phát hiện + 3 camera kho chỉ ghi hình) phát video lặp; module (tư thế + PPE v2 +
+cháy v2) đọc cả 4 camera và đẩy sự cố vào Frigate. Theo dõi bằng `scripts/do_on_dinh.py --gio 8
+--moi 60 --thu-ngat-moi 2` (cứ 2 giờ cố ý khởi động lại máy giả lập để thử tự nối lại).
+Chạy bằng `data/demo/chay_8_gio.ps1` (tự dừng nếu ổ C còn dưới 8 GB).
+
+| | Kết quả |
+|---|---|
+| Thời gian | 8,0 giờ (23:28 → 07:28), 458 lần đo |
+| Frigate trả lời API | 458/458 (100%) |
+| Module ngừng | 0 lần |
+| Mất luồng | 4 lần cố ý + 4 lần tự rớt, cả 8 lần tự nối lại trong vòng 5 phút đo |
+| FPS trung bình (thấp nhất) | xuong_han 5,5 (4,8); kho_1 5,2 (3,8); kho_2 4,1 (1,2); kho_3 5,4 (4,2) |
+| CPU trung bình | Frigate 124%, module 109%, máy giả lập 37% (trên 1200% của 12 luồng) |
+| VRAM cả card | ~630 MB |
+| RAM module | 1,67 GB → 1,01 GB (giảm, không rò) |
+| RAM Frigate | 1,21 → 1,76 GB; tăng chậm dần theo giờ: +148, +197, +87, +34, +22, +38, +26 MB, đi ngang ~1,75 GB. Đi theo số sự cố tích luỹ (6.113 sự cố) nên nhiều khả năng là bộ nhớ đệm, không phải rò; chạy dài hơn mới khẳng định được |
+| Sự cố module ghi | 6.113 trong 8 giờ (~190 mỗi giờ mỗi camera): video giả lập lặp 17 s, lúc nào cũng có người vi phạm, mỗi chỗ báo lại sau 60 s chờ — không phải tỉ lệ ngoài thực tế |
+| Ổ đĩa | tốn ~17 GB trong 8 giờ, phần lớn là đoạn ghi hình Frigate giữ quanh 6.113 sự cố (giữ 14 ngày). Ngoài thực tế ít sự cố hơn nhiều, nhưng phải tính dung lượng theo số sự cố, không chỉ theo số camera |
+
+Lần chạy thứ nhất (16–17/11) dừng ở 5,7 giờ vì đầy ổ: luật báo lặp cũ ra 11.487 sự cố trên video
+lặp. Đã sửa (commit 4950f01) trước lần chạy này.
