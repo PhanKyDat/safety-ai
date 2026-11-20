@@ -373,6 +373,18 @@ Frigate thì thêm `--khong-telegram`, hoặc trỏ `TELEGRAM_CHAT_ID` sang chat
 60 giây rồi lấy mẫu, xong **trả lại cấu hình cũ**. Camera thứ 5–8 nằm trong `sim/mediamtx.yml`
 ở chế độ `runOnDemand` nên ngày thường không chạy, không tốn tài nguyên.
 
+Đo "Frigate + module" (cột còn trống trong `docs/doi-chieu.md` mục 5): thêm `--module`, script
+tự bật `safety.cli` đọc đúng số camera của từng mức, đo thêm CPU/RAM tiến trình module,
+GPU/VRAM, và đọc nhịp xử lý module tự in ra khi xong:
+
+```powershell
+.venv\Scripts\python.exe scripts\do_b4.py --module --extra-model models\ppe_v2_best.pt --extra-model models\fire_v2_best.pt
+```
+
+Module ghi vào `data/incidents_b4.db` riêng, không gửi Telegram, nhưng **có tạo sự cố trong
+Frigate** (đúng tải thật) — đo xong thì xoá sự cố `type=api` trong khoảng thời gian đo nếu
+không muốn chúng nằm trong Explore. Log từng mức: `data/b4_module_<n>cam.log`.
+
 ### Chạy dài ≥ 8 giờ
 
 ```powershell
@@ -384,15 +396,26 @@ Mỗi phút ghi một dòng CSV: FPS từng camera, tốc độ bộ phát hiệ
 số sự cố trong DB, số lần Frigate mất luồng. Cuối buổi in tổng kết và tự kết luận đạt hay
 chưa đạt tiêu chí "chạy liên tục ≥ 8 giờ, tự kết nối lại khi mất luồng".
 
-Chạy kèm module và cầu nối Telegram thì mới đúng cảnh thật:
+Chạy kèm module và cầu nối Telegram thì mới đúng cảnh thật. DB riêng cho số không lẫn,
+Telegram tối đa 3 tin cho khỏi ngập nhóm:
 
 ```powershell
-.venv\Scripts\python.exe -m safety.mqtt_bridge              # cửa sổ 1
-.venv\Scripts\python.exe -m safety.cli --source rtsp://127.0.0.1:8554/xuong_han --camera xuong_han   # cửa sổ 2
-.venv\Scripts\python.exe scripts\do_on_dinh.py --gio 8      # cửa sổ 3
+# cửa sổ 1 — module, 4 camera, mô hình v2
+.venv\Scripts\python.exe -m safety.cli --cam xuong_han=rtsp://127.0.0.1:8554/xuong_han --cam kho_1=rtsp://127.0.0.1:8554/kho_1 --cam kho_2=rtsp://127.0.0.1:8554/kho_2 --cam kho_3=rtsp://127.0.0.1:8554/kho_3 --extra-model models\ppe_v2_best.pt --extra-model models\fire_v2_best.pt --frigate http://127.0.0.1:5050/api --db data\incidents_8h.db --telegram --telegram-toi-da 3
+# cửa sổ 2 — theo dõi 8 giờ, cứ 2 giờ cố ý ngắt camera giả lập một lần
+.venv\Scripts\python.exe scripts\do_on_dinh.py --gio 8 --db data\incidents_8h.db --thu-ngat-moi 2
 ```
 
-Nhớ tắt chế độ ngủ của Windows trước khi chạy qua đêm.
+`do_on_dinh.py` tự tìm tiến trình `safety.cli` / `safety.mqtt_bridge` để ghi CPU/RAM của
+chúng, cuối buổi in RAM đầu buổi so với cuối buổi (tăng > 20% thì báo nghi rò bộ nhớ) và
+kiểm tra sau mỗi lần mất luồng camera có về lại trong 5 lần đo không.
+
+Chạy thử 13/11 (3 phút, ngắt 2 lần): Frigate tự nối lại cả hai lần; module **không hề bị
+đứt** (4,94 khung/giây suốt) vì module đọc restream go2rtc của Frigate, go2rtc giữ kết nối
+phía module trong lúc tự nối lại phía camera.
+
+Trước khi chạy qua đêm: cắm sạc, tắt chế độ ngủ (Settings → System → Power → Sleep: Never),
+tạm dừng Windows Update (Settings → Windows Update → Pause), tắt Docker Desktop tự cập nhật.
 
 ## Lệnh hay dùng
 

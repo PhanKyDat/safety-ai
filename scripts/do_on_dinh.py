@@ -5,8 +5,13 @@
     python scripts/do_on_dinh.py --tong-ket data/on_dinh_2026-11-11.csv   # đọc lại kết quả cũ
 
 Cứ mỗi `--moi` giây ghi một dòng CSV: FPS từng camera, tốc độ bộ phát hiện, CPU/RAM
-từng container, số sự cố trong DB, và số lần Frigate mất luồng phải nối lại. Cuối
-buổi in tổng kết: chạy được bao lâu, FPS thấp nhất, có đứt quãng không.
+từng container, CPU/RAM tiến trình module (`safety.cli`) và cầu nối (`safety.mqtt_bridge`)
+nếu đang chạy, GPU/VRAM, số sự cố trong DB, và số lần Frigate mất luồng phải nối lại.
+Cuối buổi in tổng kết: chạy được bao lâu, FPS thấp nhất, RAM đầu buổi so với cuối buổi
+(có rò bộ nhớ không), sau mỗi lần mất luồng có tự nối lại không.
+
+`--thu-ngat-moi 2` cứ 2 giờ khởi động lại camera giả lập một lần, để có bằng chứng
+"tự kết nối lại khi mất luồng" thay vì chờ mạng tự rớt.
 
 Đo từ ngoài qua API và `docker stats` nên không đụng gì vào hệ thống đang chạy.
 """
@@ -88,6 +93,45 @@ def dem_su_co(db: Path) -> int:
         return 0
 
 
+_TIEN_TRINH: dict[int, object] = {}
+
+
+def tien_trinh_python(tu_khoa: str) -> tuple[int, float, float]:
+    """(số tiến trình, CPU %, RAM MB) của các tiến trình Python có `tu_khoa` trong lệnh chạy.
+
+    python.exe của venv trên Windows là trình khởi chạy + một tiến trình con: cả hai đều
+    mang lệnh `-m safety.cli`, nên cộng RAM thì chỉ lấy tiến trình nặng nhất mỗi cặp là đủ —
+    ở đây lấy tổng nhưng trình khởi chạy chỉ ~5 MB, không làm lệch xu hướng.
+    """
+    try:
+        import psutil
+    except ImportError:
+        return 0, 0.0, 0.0
+    so = 0
+    cpu = ram = 0.0
+    for p in psutil.process_iter(["pid", "cmdline"]):
+        try:
+            if tu_khoa not in " ".join(p.info["cmdline"] or []):
+                continue
+            p = _TIEN_TRINH.setdefault(p.pid, p)  # giữ đối tượng cũ để cpu_percent có mốc
+            so += 1
+            cpu += p.cpu_percent(None)
+            ram += p.memory_info().rss / 2**20
+        except Exception:  # noqa: BLE001 - tiến trình vừa thoát / không có quyền
+            continue
+    return so, cpu, ram
+
+
+def gpu() -> tuple[float, float]:
+    out = chay(["nvidia-smi", "--query-gpu=utilization.gpu,memory.used",
+                "--format=csv,noheader,nounits"], timeout=15)
+    try:
+        dung, vram = out.strip().splitlines()[0].split(",")
+        return float(dung), float(vram)
+    except (ValueError, IndexError):
+        return 0.0, 0.0
+
+
 def mot_dong(db: Path, moi: int) -> dict:
     s = api_frigate()
     cameras = s.get("cameras", {})
@@ -100,7 +144,14 @@ def mot_dong(db: Path, moi: int) -> dict:
         "detector_ms": round(next(iter(detectors.values()), {}).get("inference_speed", 0) or 0, 2),
         "su_co": dem_su_co(db),
         "mat_luong": dem_mat_luong(moi),
+        "thu_ngat": 0,
     }
+    dong["module_song"], dong["cpu_module"], dong["ram_module"] = tien_trinh_python("safety.cli")
+    dong["cau_noi_song"], _, dong["ram_cau_noi"] = tien_trinh_python("safety.mqtt_bridge")
+    dong["cpu_module"] = round(dong["cpu_module"], 1)
+    dong["ram_module"] = round(dong["ram_module"])
+    dong["ram_cau_noi"] = round(dong["ram_cau_noi"])
+    dong["gpu_dung"], dong["vram"] = gpu()
     for ten, c in sorted(cameras.items()):
         dong[f"fps_{ten}"] = c.get("camera_fps", 0)
         dong[f"detect_{ten}"] = c.get("detection_fps", 0)
@@ -141,10 +192,55 @@ def tong_ket(duong_dan: Path) -> None:
             print(f"{ten:<12} CPU trung bình {sum(cpu) / len(cpu):>6.1f}% (đỉnh {max(cpu):.1f}%)"
                   f"   RAM {sum(ram) / len(ram):>6.0f} MB (đỉnh {max(ram):.0f} MB)")
 
-    dat = gio >= 8 and song == len(rows) and mat_luong == 0
+    co_module = any(so(r, "module_song") for r in rows)
+    if co_module:
+        cpu = [so(r, "cpu_module") for r in rows]
+        vram = [so(r, "vram") for r in rows]
+        print(f"{'module':<12} CPU trung bình {sum(cpu) / len(cpu):>6.1f}%"
+              f"            VRAM cả card {sum(vram) / len(vram):>6.0f} MB (đỉnh {max(vram):.0f} MB)")
+
+    # RAM có tăng dần không: so trung bình 10% số dòng đầu với 10% cuối (bỏ 10 phút khởi động).
     print()
-    print("KẾT LUẬN:", "ĐẠT tiêu chí chạy liên tục ≥ 8 giờ" if dat
-          else "CHƯA đạt — xem lại số lần mất luồng và thời lượng")
+    print("RAM đầu buổi → cuối buổi (trung bình 10% số lần đo đầu / cuối):")
+    bo = min(10, len(rows) // 10)
+    phan = max(1, (len(rows) - bo) // 10)
+    tang_nhieu = False
+    for cot, ten in (("ram_frigate", "frigate"), ("ram_module", "module"), ("ram_cau_noi", "cầu nối"),
+                     ("vram", "VRAM")):
+        gia_tri = [so(r, cot) for r in rows[bo:] if r.get(cot) not in (None, "", "0")]
+        if len(gia_tri) < 2:
+            continue
+        dau = sum(gia_tri[:phan]) / len(gia_tri[:phan])
+        cuoi = sum(gia_tri[-phan:]) / len(gia_tri[-phan:])
+        doi = (cuoi - dau) / dau if dau else 0
+        if doi > 0.2:
+            tang_nhieu = True
+        print(f"  {ten:<9} {dau:>7.0f} MB → {cuoi:>7.0f} MB  ({doi:+.1%})")
+
+    # Tự nối lại: sau mỗi lần mất luồng (tự nhiên hoặc cố ý ngắt) FPS camera chính phải về lại.
+    cam_chinh = "xuong_han" if "xuong_han" in cameras else (cameras[0] if cameras else None)
+    lan_ngat = [i for i, r in enumerate(rows) if so(r, "thu_ngat") or so(r, "mat_luong")]
+    khong_hoi = []
+    for i in lan_ngat:
+        sau = rows[i + 1:i + 6]  # 5 lần đo kế tiếp
+        if cam_chinh and sau and not any(so(r, f"fps_{cam_chinh}") >= 1 for r in sau):
+            khong_hoi.append(rows[i]["luc"])
+    print()
+    print(f"Lần cố ý ngắt camera : {sum(int(so(r, 'thu_ngat')) for r in rows)}")
+    print(f"Lần mất luồng / ngắt : {len(lan_ngat)}, không tự nối lại trong 5 lần đo: {len(khong_hoi)}"
+          + (f" ({', '.join(khong_hoi)})" if khong_hoi else ""))
+    if co_module:
+        tat = [r["luc"] for r in rows if not so(r, "module_song")]
+        print(f"Module có lúc không chạy: {len(tat)} lần đo" + (f" (đầu tiên {tat[0]})" if tat else ""))
+    else:
+        tat = []
+
+    dat = gio >= 8 and song == len(rows) and not khong_hoi and not tat
+    print()
+    print("KẾT LUẬN:", "ĐẠT tiêu chí chạy liên tục ≥ 8 giờ, tự nối lại khi mất luồng" if dat
+          else "CHƯA đạt — xem lại thời lượng, lần Frigate không trả lời, lần không tự nối lại")
+    if tang_nhieu:
+        print("Lưu ý: có thành phần RAM cuối buổi cao hơn đầu buổi trên 20% — nghi rò bộ nhớ.")
 
 
 def main() -> int:
@@ -154,6 +250,8 @@ def main() -> int:
     p.add_argument("--db", default="data/incidents.db")
     p.add_argument("--ra", default=None)
     p.add_argument("--tong-ket", default=None, help="chỉ đọc lại tệp CSV cũ rồi in tổng kết")
+    p.add_argument("--thu-ngat-moi", type=float, default=0, metavar="GIO",
+                   help="cứ bấy nhiêu giờ thì khởi động lại rtsp-sim một lần để thử tự nối lại (0 = không)")
     args = p.parse_args()
 
     if args.tong_ket:
@@ -170,7 +268,12 @@ def main() -> int:
         return 1
 
     het = time.time() + args.gio * 3600
+    lan_ngat_toi = time.time() + args.thu_ngat_moi * 3600 if args.thu_ngat_moi > 0 else None
     print(f"Đo mỗi {args.moi}s trong {args.gio} giờ, ghi vào {ra}. Ctrl+C để dừng sớm.")
+    if lan_ngat_toi:
+        print(f"Cứ {args.thu_ngat_moi} giờ sẽ khởi động lại rtsp-sim một lần để thử tự nối lại.")
+    if not dau["module_song"]:
+        print("Chú ý: không thấy tiến trình safety.cli — đang đo Frigate thuần.")
     with ra.open("w", newline="", encoding="utf-8-sig") as f:
         w = csv.DictWriter(f, fieldnames=list(dau))
         w.writeheader()
@@ -179,7 +282,16 @@ def main() -> int:
         try:
             while time.time() < het:
                 time.sleep(args.moi)
+                vua_ngat = False
+                if lan_ngat_toi and time.time() >= lan_ngat_toi:
+                    print(f"  {datetime.now():%H:%M:%S}  thử ngắt: khởi động lại rtsp-sim")
+                    chay(["docker", "restart", "rtsp-sim"], timeout=120)
+                    lan_ngat_toi += args.thu_ngat_moi * 3600
+                    vua_ngat = True
                 dong = mot_dong(db, args.moi)
+                dong["thu_ngat"] = int(vua_ngat)
+                if not dong["module_song"] and dau["module_song"]:
+                    print(f"  {dong['luc']}  module KHÔNG còn chạy")
                 # Camera mới xuất hiện giữa chừng thì bỏ qua cột lạ, không làm hỏng tệp.
                 w.writerow({k: v for k, v in dong.items() if k in w.fieldnames})
                 f.flush()
