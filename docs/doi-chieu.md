@@ -178,7 +178,7 @@ Kết quả thô: `data/b4_laptop_frigate_thuan.csv`, `data/b4_laptop_co_module.
 | Chỉ số | Mục tiêu | Hiện tại | Đạt? |
 |---|---|---|---|
 | mAP50 mũ, áo, người | ≥ 0,80 | mũ 0,825; áo 0,743 (tập ảnh test cố định, bản finetune_v1) | Mũ đạt, áo chưa |
-| Recall lửa / ngã trên video kiểm thử | ≥ 0,90 | lửa 0,91 (10/11); ngã 0,27 (8/30, UR Fall), 0/3 trên video góc cao của nhóm | Lửa đạt, ngã chưa (xem mục 3) |
+| Recall lửa / ngã trên video kiểm thử | ≥ 0,90 | lửa 0,91 (10/11); ngã 0,27 (8/30, UR Fall); góc cao: luật chốt bắt 3/3 video dò ngưỡng, **1/3 video kiểm thử mới**, 0 báo nhầm trên 4 clip ngồi/cúi (`docs/luat-nga.md` mục 4) | Lửa đạt, ngã chưa |
 | Báo nhầm mỗi giờ video mỗi camera | Ghi số đo thật | Đồ bảo hộ 10,8/giờ trên 12 video (1 lần trong 334 s); lửa 15,7/giờ trên FIRESENSE | Đã có số |
 | Độ trễ tới Frigate / Telegram | ≤ 5 s | Trung vị 3,9 s (thiếu áo), 5,8 s (thiếu mũ) = luật + ~0,5 s hạ tầng | Thiếu áo đạt; thiếu mũ vượt 0,8 s, do 3 s luật cố ý chờ (mục 4) |
 | Số camera chạy đồng thời | Ghi số đo thật | 8 camera chạy cùng Frigate: module 4,96 khung/giây mỗi camera (mục tiêu 5), CPU cả hệ ~37% laptop (mục 5b, 17/11) | Đạt |

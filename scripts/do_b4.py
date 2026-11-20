@@ -15,6 +15,16 @@ GPU/VRAM (nvidia-smi), cuối mức đọc nhịp xử lý mà module tự in ra
 
 Module ghi sự cố vào `data/incidents_b4.db` (riêng, không lẫn thống kê) và không gửi Telegram.
 
+**Cổng API của Frigate:** `--frigate-api` mặc định `http://127.0.0.1:5050/api` vì trên máy Uy
+cổng 5000 đã bị tiến trình khác chiếm nên `docker-compose.override.yml` mở 5000 của Frigate ra
+5050. Máy khác mở thẳng cổng 5000 thì phải thêm:
+
+    python scripts/do_b4.py --module --frigate-api http://127.0.0.1:5000/api ...
+
+Sai cổng thì module không đẩy được sự cố vào Frigate (log `data/b4_module_<n>cam.log` báo lỗi
+kết nối) và số CPU Frigate thấp hơn thực tế. Phần đo Frigate thuần không dùng cổng này (đi qua
+`docker exec`).
+
 Camera kho dùng luồng chép thẳng (không mã hoá lại) nên máy giả lập không thành chỗ
 nghẽn; xem docs/frigate-setup.md mục tuần 8.
 """
@@ -271,7 +281,8 @@ def main() -> int:
     p.add_argument("--ra", default=None)
     p.add_argument("--module", action="store_true", help="chạy kèm safety.cli để đo Frigate + module")
     p.add_argument("--extra-model", action="append", default=[], help="truyền thẳng cho safety.cli")
-    p.add_argument("--frigate-api", default="http://127.0.0.1:5050/api")
+    p.add_argument("--frigate-api", default="http://127.0.0.1:5050/api",
+                   help="API Frigate cho module; máy mở thẳng cổng 5000 thì dùng http://127.0.0.1:5000/api")
     p.add_argument("--module-db", default="data/incidents_b4.db")
     args = p.parse_args()
     if args.module and args.ghi_chu == "frigate thuan":
