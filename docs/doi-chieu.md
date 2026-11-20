@@ -4,7 +4,7 @@ Mục 6 của kế hoạch: module của nhóm thêm được gì so với Friga
 tài nguyên. Tài liệu này gom mọi số đo về một chỗ để cắt thẳng vào báo cáo cuối kỳ; ô nào ghi
 **chưa đo** là còn chờ, kèm người phụ trách.
 
-Cập nhật lần cuối: 11/11 (tuần 10).
+Cập nhật lần cuối: 17/11 (tuần 11): B1 đã đo, B4 có module, lần chạy dài thứ nhất.
 
 ## 1. So sánh tính năng (mục 6.1)
 
@@ -20,14 +20,30 @@ Cập nhật lần cuối: 11/11 (tuần 10).
 
 ## 2. B1 — Không đội mũ: Object Classification của Frigate so với module
 
-| | Frigate Object Classification | Module nhóm (cách vắng mặt) |
+| | Frigate Object Classification (`mu_bao_ho`) | Module nhóm (cách vắng mặt, PPE v2) |
 |---|---|---|
-| Recall thiếu mũ | **chưa đo** — model đã huấn luyện 11/11, chờ Trường đo trên `test_*` | 8/8 khoảng vi phạm (100%) |
-| Precision | **chưa đo** | 100% (0 báo nhầm) |
-| Bộ đo | 12 video: 10 đoạn tự quay góc cao (7 ban ngày 1 người, 3 ban đêm 2 người) + 2 video kho | |
+| Bắt được thiếu mũ (recall) | **2/8 khoảng vi phạm (25%)** | **6/8 (75%)**; bản PPE v1 tuần 9: 8/8 |
+| Báo nhầm / precision | 0 báo nhầm, P 100% | 0 báo nhầm, P 100% |
+| F1 | 40,0% | 85,7% |
+| Bộ đo | 12 video: 10 đoạn tự quay góc cao (7 ban ngày 1 người, 3 ban đêm 2 người) + 2 video kho; cùng đáp án, cùng cách chấm (dung sai báo muộn 5 s) | |
 
-Cách chạy: `docs/doi-chung-b1.md`. Số của module: `scripts/evaluate_videos.py` (mặc định đã dùng
-cách vắng mặt), kết quả `runs/eval/tuan9_tat_ca`.
+Đo 17/11 trên laptop Đạt bằng `scripts/cham_b1.py` (cách dựng nằm ở đầu script): ghép 12 video
+thành một, phát một lượt vào camera `b1` của Frigate (detect 640x360, 5 khung/s, bật
+`mu_bao_ho`), rồi đổi giờ từng sự kiện về giây trong video và chấm bằng đúng hàm chấm của module.
+Thời điểm báo của Frigate lấy theo lúc lượt bám vết chồng lên khoảng vi phạm, tức là có lợi cho
+Frigate (không tính độ trễ). Số của module: `scripts/evaluate_videos.py`, `runs/eval/nga_chot`.
+
+Vì sao Frigate sót 6/8 (15 lượt bám vết: 10 `co_mu`, 2 `khong_mu`, 3 chưa phân loại):
+
+* **Gán một nhãn cho cả lượt bám vết.** Ở 3 đoạn ban ngày người đội mũ đi vào rồi mới tháo
+  mũ; Frigate đã gán `co_mu` từ đầu và giữ nguyên, nên không bao giờ ra `khong_mu`. Module xét
+  từng khung nên bắt được lúc tháo mũ. Đây là khác biệt về cách làm, không phải do model kém.
+* **Không thấy người thì không phân loại.** Ở `test_khong_mu_03`, `xuong_han` và `goc`, bộ
+  phát hiện mặc định của Frigate không ra lượt bám vết người nào (góc cao, người nhỏ), nên
+  không có gì để phân loại.
+* Hai đoạn bắt được là ban đêm, người bỏ mũ từ đầu lượt bám vết.
+
+Cách chạy cũ (đếm, ghép với module, chưa chấm điểm): `docs/doi-chung-b1.md`.
 
 **Model Frigate đã huấn luyện (11/11):** 149 ảnh `co_mu` + 107 ảnh `khong_mu`, lấy từ video
 Pexels và video kho, **không lấy từ `test_*`**. Kiểm tra sơ bộ trên 3 đoạn chưa dùng để huấn
@@ -108,12 +124,7 @@ bộ phát hiện **CPU**, mỗi mức lấy 9 mẫu trong 3 phút sau khi chờ
 | Frigate thuần: GPU | 0 (bộ phát hiện chạy CPU) | 0 | 0 |
 | Thời gian một lần phát hiện | 12,6 ms | 13,2 ms | 13,7 ms |
 | FPS trung bình các camera | 5,04 | 4,44 | 4,26 |
-| Frigate + module: CPU, GPU, RAM | **chưa đo** — Đạt đo trên laptop Đạt | **chưa đo** | **chưa đo** |
-
-Cột "Frigate + module" Đạt đo trên laptop của Đạt, **đo lại cả Frigate thuần lẫn có module trên
-cùng máy đó** cho công bằng (`scripts/do_b4.py` rồi `scripts/do_b4.py --module --extra-model
-models\ppe_v2_best.pt --extra-model models\fire_v2_best.pt`). Bảng Frigate thuần ở trên (máy Uy)
-vẫn giữ trong báo cáo, ghi rõ là máy khác.
+| Frigate + module | đo trên laptop Đạt, xem bảng 5b | | |
 
 Đọc số này ra sao:
 
@@ -130,6 +141,38 @@ lấy mẫu, xong trả lại cấu hình cũ). Kết quả thô: `data/b4_2026-
 
 Chỗ nghẽn của module là CPU giải mã video (8 luồng 720p tốn 22% CPU), không phải GPU.
 
+### 5b. Frigate thuần so với Frigate + module, cùng một máy (17/11)
+
+Laptop Đạt: i5-11400H (12 luồng = 1200%), 16 GB RAM, RTX 3050 Ti 4 GB; Frigate 0.17.2 trong
+Docker, bộ phát hiện CPU; module dùng mô hình tư thế + PPE v2 + cháy v2. Hai lượt chạy liền
+nhau sáng 17/11 bằng `scripts/do_b4.py` (có và không `--module`), mỗi mức 11 mẫu trong 3 phút.
+
+| | 1 camera | 4 camera | 8 camera |
+|---|---|---|---|
+| Frigate thuần: CPU Frigate (đỉnh) | 82% (96%) | 121% (152%) | 138% (174%) |
+| Frigate thuần: RAM Frigate | 746 MB | 1146 MB | 1517 MB |
+| Có module: CPU Frigate (đỉnh) | 87% (100%) | 130% (174%) | 204% (265%) |
+| Có module: CPU module | 46% | 110% | 200% |
+| Có module: RAM module | 1577 MB | 1846 MB | 2194 MB |
+| Có module: GPU / VRAM cả card | 35% / 668 MB | 38% / 660 MB | 38% / 876 MB |
+| Có module: nhịp module mỗi camera | 4,88 khung/s | 4,98 khung/s | 4,96 khung/s |
+| Có module: thời gian một lô | 74 ms | 107 ms | 142 ms |
+| CPU cả hệ (Frigate + máy giả lập [+ module]) | 116% → 169% | 156% → 278% | 170% → 449% |
+
+Đọc số:
+
+* Module giữ đủ ~5 khung/giây cho **cả 8 camera** (mục tiêu 5); card 4 GB dùng chưa tới 1 GB.
+* Thêm module tốn khoảng **25 điểm % CPU mỗi camera** (≈ 2% của 12 luồng), phần lớn là giải
+  mã video. 8 camera cả hệ dùng ~449% = khoảng 37% sức CPU của laptop.
+* CPU Frigate ở mức 8 camera tăng 138% → 204% khi có module, vì module đọc 8 luồng qua bộ phát
+  lại (go2rtc) của Frigate và Frigate phải nhận, lưu sự cố module đẩy vào.
+* Lượt đo Frigate thuần tối 16/11 trên cùng laptop ra số gần gấp đôi (CPU 171/220/367%,
+  phát hiện 21–33 ms thay vì 11 ms) vì máy đang bận việc khác (Visual Studio tự cập nhật);
+  đã đo lại, giữ bản cũ ở `data/b4_laptop_frigate_thuan_may_ban.csv` để đối chiếu. Bài học:
+  so có/không module phải đo liền nhau trong cùng điều kiện.
+
+Kết quả thô: `data/b4_laptop_frigate_thuan.csv`, `data/b4_laptop_co_module.csv`.
+
 ## 6. Tiêu chí đánh giá (mục 9 của kế hoạch)
 
 | Chỉ số | Mục tiêu | Hiện tại | Đạt? |
@@ -138,5 +181,30 @@ Chỗ nghẽn của module là CPU giải mã video (8 luồng 720p tốn 22% CP
 | Recall lửa / ngã trên video kiểm thử | ≥ 0,90 | lửa 0,91 (10/11); ngã 0,27 (8/30, UR Fall), 0/3 trên video góc cao của nhóm | Lửa đạt, ngã chưa (xem mục 3) |
 | Báo nhầm mỗi giờ video mỗi camera | Ghi số đo thật | Đồ bảo hộ 10,8/giờ trên 12 video (1 lần trong 334 s); lửa 15,7/giờ trên FIRESENSE | Đã có số |
 | Độ trễ tới Frigate / Telegram | ≤ 5 s | Trung vị 3,9 s (thiếu áo), 5,8 s (thiếu mũ) = luật + ~0,5 s hạ tầng | Thiếu áo đạt; thiếu mũ vượt 0,8 s, do 3 s luật cố ý chờ (mục 4) |
-| Số camera chạy đồng thời | Ghi số đo thật | 8 camera ở 4,46 khung/giây (mục tiêu 5) trên laptop; 4 camera đạt | Đã có số |
-| Chạy liên tục không lỗi | ≥ 8 giờ, tự nối lại khi mất luồng | **chưa chạy** — Đạt chạy trên laptop Đạt bằng `do_on_dinh.py --gio 8 --thu-ngat-moi 2` (lệnh đủ trong `docs/frigate-setup.md`) | Chờ |
+| Số camera chạy đồng thời | Ghi số đo thật | 8 camera chạy cùng Frigate: module 4,96 khung/giây mỗi camera (mục tiêu 5), CPU cả hệ ~37% laptop (mục 5b, 17/11) | Đạt |
+| Chạy liên tục không lỗi | ≥ 8 giờ, tự nối lại khi mất luồng | **8,0 giờ** (17–18/11, laptop Đạt, 4 camera + module, mô hình v2): Frigate trả lời API 458/458 lần đo; module không lần nào ngừng; 4 lần cố ý ngắt camera + 4 lần tự rớt, **cả 8 lần tự nối lại**; FPS trung bình 4,1–5,5 mỗi camera. Xem mục 7 | **Đạt** |
+
+## 7. Chạy liên tục 8 giờ (17–18/11)
+
+Laptop Đạt (i5-11400H, RTX 3050 Ti 4 GB), Frigate 0.17.2 bộ phát hiện CPU, 4 camera giả lập
+(`xuong_han` phát hiện + 3 camera kho chỉ ghi hình) phát video lặp; module (tư thế + PPE v2 +
+cháy v2) đọc cả 4 camera và đẩy sự cố vào Frigate. Theo dõi bằng `scripts/do_on_dinh.py --gio 8
+--moi 60 --thu-ngat-moi 2` (cứ 2 giờ cố ý khởi động lại máy giả lập để thử tự nối lại).
+Chạy bằng `data/demo/chay_8_gio.ps1` (tự dừng nếu ổ C còn dưới 8 GB).
+
+| | Kết quả |
+|---|---|
+| Thời gian | 8,0 giờ (23:28 → 07:28), 458 lần đo |
+| Frigate trả lời API | 458/458 (100%) |
+| Module ngừng | 0 lần |
+| Mất luồng | 4 lần cố ý + 4 lần tự rớt, cả 8 lần tự nối lại trong vòng 5 phút đo |
+| FPS trung bình (thấp nhất) | xuong_han 5,5 (4,8); kho_1 5,2 (3,8); kho_2 4,1 (1,2); kho_3 5,4 (4,2) |
+| CPU trung bình | Frigate 124%, module 109%, máy giả lập 37% (trên 1200% của 12 luồng) |
+| VRAM cả card | ~630 MB |
+| RAM module | 1,67 GB → 1,01 GB (giảm, không rò) |
+| RAM Frigate | 1,21 → 1,76 GB; tăng chậm dần theo giờ: +148, +197, +87, +34, +22, +38, +26 MB, đi ngang ~1,75 GB. Đi theo số sự cố tích luỹ (6.113 sự cố) nên nhiều khả năng là bộ nhớ đệm, không phải rò; chạy dài hơn mới khẳng định được |
+| Sự cố module ghi | 6.113 trong 8 giờ (~190 mỗi giờ mỗi camera): video giả lập lặp 17 s, lúc nào cũng có người vi phạm, mỗi chỗ báo lại sau 60 s chờ — không phải tỉ lệ ngoài thực tế |
+| Ổ đĩa | tốn ~17 GB trong 8 giờ, phần lớn là đoạn ghi hình Frigate giữ quanh 6.113 sự cố (giữ 14 ngày). Ngoài thực tế ít sự cố hơn nhiều, nhưng phải tính dung lượng theo số sự cố, không chỉ theo số camera |
+
+Lần chạy thứ nhất (16–17/11) dừng ở 5,7 giờ vì đầy ổ: luật báo lặp cũ ra 11.487 sự cố trên video
+lặp. Đã sửa (commit 4950f01) trước lần chạy này.
