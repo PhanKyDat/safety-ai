@@ -87,6 +87,11 @@ còn là `test_` — recall phải đo lại trên video khác hoặc trên UR F
 (kho, các đoạn `train_*`) chưa có cảnh ngồi xổm, cúi nhặt đồ — đúng loại tư thế cũng làm khung
 người bè ra, cần quay thêm để đo báo nhầm.
 
+> **Cập nhật:** đoạn trên là tình trạng ngày 16/11, trước khi chốt luật. Luật đã chốt ngày 17/11
+> (thêm nhánh khung bè kèm điều kiện nằm yên, tụt chiều cao, bỏ khung chạm mép). Kết quả: 3/3 trên
+> 3 video dò ngưỡng; **1/3 trên 3 video ngã mới** (đợt 2, 20/11); 0 báo nhầm trên 12 video người đi
+> lại và 4 clip ngồi xổm/cúi. Đạt chấm lại ngày 23/11, ra cùng số với Uy. Chi tiết: `docs/luat-nga.md`.
+
 ## 4. B3 — Độ trễ từ lúc có sự cố tới lúc hiện trong Frigate / Telegram
 
 | Đoạn | Số đo | Ghi chú |

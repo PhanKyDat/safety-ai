@@ -93,3 +93,26 @@ Ngồi xổm lâu cũng bè, tụt chiều cao và đứng yên, nên nới đi�
 báo nhầm. Để nguyên luật đã chốt và ghi recall 1/3 là trung thực; nếu sửa thì phải tìm thêm đặc
 trưng tách ngồi xổm (ví dụ hông thấp hơn gối, hoặc khung cao/rộng của người ngồi) và đo lại trên
 cả 12 video người đi lại của nhóm.
+
+## 5. Quyết định (23/11)
+
+Đạt chấm lại trên cả 22 video (`runs/eval/dot2_kiem_lai`), ra cùng số với Uy:
+- ngã: 4/6 (`nga_01..04` bắt; `nga_05`, `nga_06` sót);
+- 0 báo ngã nhầm trên 12 video người đi lại và 4 clip ngồi/cúi.
+
+**Giữ nguyên luật đã chốt** vì hai lý do:
+- Nới "nằm yên" chỉ đổi một cú ngã lấy một báo nhầm ngồi xổm.
+- Chỉnh tiếp theo 7 clip đợt 2 thì chúng thành dữ liệu dò ngưỡng, nhóm mất bộ kiểm thử độc lập
+  duy nhất. Không còn thời gian quay đợt 3.
+
+Báo cáo ghi:
+- **Recall thật ở góc cao: 1/3** trên video chưa dùng dò ngưỡng.
+- **Khuyến nghị lắp đặt:** vùng sàn cần giám sát nằm trọn trong khung hình, cách mép ảnh
+  (`nga_06` sót vì người ngã chạm mép dưới).
+- **Hướng làm tiếp:** đặc trưng tách ngồi xổm khỏi nằm (hông so với gối), hoặc huấn luyện riêng
+  một lớp "người nằm" thay vì suy từ tư thế.
+
+Lưu ý khi đọc bảng của `evaluate_videos.py` trên cả 22 video: cột thiếu mũ/thiếu áo sẽ ra 10 lần
+"nhầm". Đó là người trong clip ngã/ngồi/cúi không đội mũ, mặc áo; clip chỉ gán đáp án cho ngã,
+nên mọi sự cố đồ bảo hộ ở đó đều bị tính là nhầm. Số đồ bảo hộ phải lấy trên 12 video đồ bảo hộ:
+6/8 thiếu mũ, 7/7 thiếu áo, 0 báo nhầm.
