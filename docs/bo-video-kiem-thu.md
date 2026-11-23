@@ -31,6 +31,18 @@ Mỗi đoạn nên có **5 giây đầu không có người** để Frigate kị
 | `khong_mu` | Không đội mũ, đứng/đi trong khung **≥ 10 s** | 2–3 đoạn | B1, recall thiếu mũ |
 | `khong_ao` | Không mặc áo phản quang **≥ 10 s** | 2 đoạn | Recall thiếu áo |
 | `nga` | Ngã rồi **nằm yên ≥ 5 s** — ngã lên nệm | 2–3 đoạn | Recall ngã |
+
+Đã quay (16/11): `test_nga_01_dem` (ngửa), `test_nga_02_dem` (nghiêng), `test_nga_03_dem` (sấp), máy
+cao chúi xuống, đứng yên. Lệch so với bảng trên: quay **dọc** 720×1280, dài 12–15 s (dưới 20 s), nằm
+yên 7–9 s, không có 5 s đầu trống. Đủ để soi luật ngã (kết quả: `docs/doi-chieu.md` mục 3); lần quay
+sau nên quay ngang, ≥ 20 s, nằm ≥ 10 s, và thêm cảnh ngồi xổm / cúi nhặt đồ để đo báo nhầm.
+Ba video này đã dùng để dò ngưỡng luật ngã (`docs/luat-nga.md`), không còn là video kiểm thử.
+
+Đợt 2 (20/11), chỗ khác, máy **quay ngang** 1280×720, đặt cao: `test_nga_04_dem` (ngửa),
+`test_nga_05_dem` (nghiêng), `test_nga_06_dem` (sấp về phía camera), `test_ngoi_01_dem` (ngồi xổm),
+`test_ngoi_02_dem` (ngồi xổm nhặt đồ ở bàn), `test_cui_01_dem`, `test_cui_02_dem` (cúi nhặt đồ).
+Lệch: clip ngã 13–14 s, ngồi 12,5 s (Đạt cần 15–30 s, ngồi ~20 s), clip cúi chỉ 5–6 s; `cui_02`
+hơi trôi (0,86 px) — module chạy được, Frigate thì không. Kết quả: `docs/luat-nga.md` mục 4.
 | `vung_nguy_hiem` | Đi vào và đứng trong vùng đã vẽ | 2 đoạn | Vùng nguy hiểm |
 | `bay_ao_cam` | Mặc áo cam/vàng **thường** (không phải áo phản quang) | 1–2 đoạn | Báo nhầm |
 | `bay_mu_luoi_trai` | Đội mũ lưỡi trai, mũ len | 1–2 đoạn | Báo nhầm |

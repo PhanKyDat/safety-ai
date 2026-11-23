@@ -53,3 +53,43 @@ Ghi chú khi viết báo cáo:
 
 Chạy lại: `scripts/evaluate_videos.py data/videos_test/test_*.mp4 ...` (kết quả
 `runs/eval/nga_chot`), `scripts/evaluate_urfall.py data/public/urfall` (`runs/eval/urfall_chot`).
+
+## 4. Kiểm thử trên video mới (20/11, Uy quay)
+
+Đợt quay thứ hai, **chưa dùng để dò ngưỡng**: chỗ khác, máy quay ngang 1280×720, đặt cao chúi
+xuống, 5–14 s mỗi clip. Đáp án trong `data/videos_test/nhan.csv`.
+
+| Clip | Cảnh | Luật đã chốt |
+|---|---|---|
+| `test_nga_04_dem` | ngã ngửa | **bắt**, báo sau khi ngã 5 s |
+| `test_nga_05_dem` | ngã nghiêng | **sót** |
+| `test_nga_06_dem` | ngã sấp về phía camera | **sót** |
+| `test_ngoi_01_dem` | ngồi xổm suốt clip | không báo (đúng) |
+| `test_ngoi_02_dem` | cúi rồi ngồi xổm nhặt đồ ở bàn | không báo (đúng) |
+| `test_cui_01_dem`, `test_cui_02_dem` | cúi nhặt đồ dưới sàn | không báo (đúng) |
+
+**Recall thật trên video góc cao: 1/3; báo nhầm 0 trên 4 clip ngồi/cúi.** Kết quả:
+`runs/eval/nga_dot2` (chỉ 7 clip mới), `runs/eval/nga_tat_ca_goc` (cả 10 clip).
+
+Vì sao sót (soi từng khung, mô hình tư thế thấy rõ vai/hông ≥ 0,9 ở cả hai):
+
+* **`nga_05`**: khung bè 1,15–1,20, không chạm mép, chiều cao đã tụt (262 so với 433 px lúc đứng
+  = 0,60), nằm im tuyệt đối từ giây 5,6. Trượt ở **"nằm yên"**: `_wide_confirmed` đo xê dịch trên
+  **mọi khung từ lúc bắt đầu đếm**, gồm cả lúc đang lăn xuống sàn (≈ 87 px, ngưỡng 0,10 × 262 =
+  26 px). Lần đếm không bị ngắt nên phần xê dịch đó ở lại mãi — nằm im bao lâu cũng không đạt.
+* **`nga_06`**: ngã về phía camera, khung người **chạm mép dưới ảnh** từ giây 5,2 nên điều kiện
+  `edge_margin` bỏ qua. Đây đúng là loại báo nhầm điều kiện này chặn (người đứng sát mép dưới bị
+  cắt nửa người), nên khó tách bằng khung người; về triển khai thì nên đặt camera sao cho vùng
+  sàn cần giám sát nằm trọn trong khung, cách mép.
+
+Thử sửa "nằm yên" chỉ đo trên ~3 s gần nhất (giả lập, **chưa sửa `rules.py`**):
+
+| | Ngã bắt được (6 clip) | Báo nhầm (4 clip ngồi/cúi) |
+|---|---|---|
+| Luật đã chốt | 4/6 (`nga_05`, `nga_06` sót) | 0 |
+| "Nằm yên" đo trên 3 s gần nhất | 5/6 (thêm `nga_05`) | **1** (`ngoi_02`: ngồi xổm nhặt đồ ở bàn) |
+
+Ngồi xổm lâu cũng bè, tụt chiều cao và đứng yên, nên nới điều kiện này đổi một cú ngã lấy một
+báo nhầm. Để nguyên luật đã chốt và ghi recall 1/3 là trung thực; nếu sửa thì phải tìm thêm đặc
+trưng tách ngồi xổm (ví dụ hông thấp hơn gối, hoặc khung cao/rộng của người ngồi) và đo lại trên
+cả 12 video người đi lại của nhóm.

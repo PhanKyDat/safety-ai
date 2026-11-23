@@ -63,9 +63,29 @@ giả (`docs/du-lieu-cong-khai.md`):
 | Lửa (FIRESENSE) | 0 | 10/11 video | 3/16 video (đều do đèn) | 80,0% | 0,89 | 0,88 (0,37) |
 | Khói (FIRESENSE) | 0 | 12/13 video | 0/9 video | 96,0% | 0,88 | 0,91 (0,65) |
 | Ngã (UR Fall, giữ khung cuối 4 s) | 0 | 8/30 video | 2/40 video | 40,0% | 0,81* | 0,76 (0,17)* |
+| Ngã (video nhóm góc cao, 3 video) | 0 | **0/3 video** | – | – | 0,82 | 0,96 (0,81) |
 
-\* Ngã: theo từng khung, chỉ trên khung mô hình thấy người. Ngã còn chờ video góc cao của nhóm
-(Uy quay) để chốt ngưỡng; bộ UR Fall quay ngang ngực nên 40% khung người nằm không thấy người.
+\* Ngã: theo từng khung, chỉ trên khung mô hình thấy người. Bộ UR Fall quay ngang ngực nên 40%
+khung người nằm không thấy người.
+
+**Video ngã góc cao của nhóm (16/11, Uy quay):** ngã ngửa, nghiêng, sấp, máy đặt cao chúi xuống
+(`test_nga_01..03_dem`, đáp án trong `nhan.csv`). Luật hiện tại **bỏ sót cả 3**. Soi từng khung
+bằng `scripts/soi_goc_nga.py`: mô hình tư thế thấy rõ vai và hông (độ tin cậy 0,9–1,0), lỗi nằm ở
+ngưỡng góc — nhìn chéo từ trên cao, thân người nằm bị co ngắn nên góc thân trên ảnh chỉ còn
+31° (ngửa), **3°** (nghiêng, nằm dọc hướng nhìn của camera) và 40° (sấp), xa ngưỡng 60°.
+Gợi ý cho Đạt chốt luật (giả lập trên cùng dữ liệu, chưa sửa `safety/rules.py`):
+
+| Biến thể luật (vẫn liên tục 3 s) | Ngửa | Nghiêng | Sấp | Báo nhầm trên 5 video người đi lại |
+|---|---|---|---|---|
+| Hiện tại: thân ≥ 60°, chân ≥ 45° | sót | sót | sót | 0 |
+| Thân ≥ 25°, chân ≥ 15° | sót | sót | bắt | 0 |
+| Khung người rộng/cao ≥ 0,7 và thấy rõ vai, hông | bắt | bắt | bắt | 0 |
+
+Khung người lúc đứng rộng/cao ≤ 0,43, lúc nằm ≥ 0,57 trên cả 3 video. Hai điều phải nhớ trước
+khi đưa vào báo cáo: (1) dò ngưỡng trên 3 video này thì chúng thành video **dò ngưỡng**, không
+còn là `test_` — recall phải đo lại trên video khác hoặc trên UR Fall; (2) 5 video người đi lại
+(kho, các đoạn `train_*`) chưa có cảnh ngồi xổm, cúi nhặt đồ — đúng loại tư thế cũng làm khung
+người bè ra, cần quay thêm để đo báo nhầm.
 
 ## 4. B3 — Độ trễ từ lúc có sự cố tới lúc hiện trong Frigate / Telegram
 
@@ -158,7 +178,7 @@ Kết quả thô: `data/b4_laptop_frigate_thuan.csv`, `data/b4_laptop_co_module.
 | Chỉ số | Mục tiêu | Hiện tại | Đạt? |
 |---|---|---|---|
 | mAP50 mũ, áo, người | ≥ 0,80 | mũ 0,825; áo 0,743 (tập ảnh test cố định, bản finetune_v1) | Mũ đạt, áo chưa |
-| Recall lửa / ngã trên video kiểm thử | ≥ 0,90 | lửa 0,91 (10/11); ngã 0,27 (8/30, UR Fall) | Lửa đạt, ngã chưa |
+| Recall lửa / ngã trên video kiểm thử | ≥ 0,90 | lửa 0,91 (10/11); ngã 0,27 (8/30, UR Fall); góc cao: luật chốt bắt 3/3 video dò ngưỡng, **1/3 video kiểm thử mới**, 0 báo nhầm trên 4 clip ngồi/cúi (`docs/luat-nga.md` mục 4) | Lửa đạt, ngã chưa |
 | Báo nhầm mỗi giờ video mỗi camera | Ghi số đo thật | Đồ bảo hộ 10,8/giờ trên 12 video (1 lần trong 334 s); lửa 15,7/giờ trên FIRESENSE | Đã có số |
 | Độ trễ tới Frigate / Telegram | ≤ 5 s | Trung vị 3,9 s (thiếu áo), 5,8 s (thiếu mũ) = luật + ~0,5 s hạ tầng | Thiếu áo đạt; thiếu mũ vượt 0,8 s, do 3 s luật cố ý chờ (mục 4) |
 | Số camera chạy đồng thời | Ghi số đo thật | 8 camera chạy cùng Frigate: module 4,96 khung/giây mỗi camera (mục tiêu 5), CPU cả hệ ~37% laptop (mục 5b, 17/11) | Đạt |
