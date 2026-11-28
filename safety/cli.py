@@ -71,6 +71,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--max-frames", type=int, default=0, help="Số lượt (mỗi lượt một khung mỗi camera), 0 = chạy mãi")
     p.add_argument("--json", action="store_true", help="In FrameResult dạng JSON mỗi dòng")
     p.add_argument("--show", action="store_true", help="Mở cửa sổ xem trực tiếp, nhấn Q để dừng sớm")
+    p.add_argument("--ghep", action="store_true",
+                   help="cùng --show: ghép mọi camera vào một cửa sổ dạng lưới (tiện quay video màn hình)")
     p.add_argument("--toc-do-that", action="store_true", dest="real_time",
                    help="Nguồn là tệp video: chạy đúng tốc độ thật thay vì nhanh hết mức (để xem/quay demo)")
     p.add_argument("--lap-lai", action="store_true", dest="loop",
@@ -107,6 +109,23 @@ def draw(image, title: str = "safety-ai"):
 
     cv2.imshow(title, image)
     return cv2.waitKey(1) & 0xFF == ord("q")
+
+
+def mosaic(images: list, cell: tuple[int, int] = (960, 540)):
+    """Ghép các khung đã vẽ thành lưới (2 cột khi có từ 2 camera), mỗi ô cùng cỡ `cell`."""
+    import math
+
+    import cv2
+    import numpy as np
+
+    cols = 1 if len(images) == 1 else 2
+    rows = math.ceil(len(images) / cols)
+    w, h = cell
+    out = np.zeros((rows * h, cols * w, 3), dtype=np.uint8)
+    for i, img in enumerate(images):
+        r, c = divmod(i, cols)
+        out[r * h:(r + 1) * h, c * w:(c + 1) * w] = cv2.resize(img, (w, h))
+    return out
 
 
 def model_label(model: str, extra: list[str]) -> str:
@@ -170,6 +189,7 @@ def main(argv: list[str] | None = None) -> int:
     started = 0.0
     infer_ms: list[float] = []
     frame_at: list[float] = []
+    tiles: dict = {}          # --ghep: khung đã vẽ gần nhất của từng camera
 
     try:
         for batch in batches():
@@ -205,8 +225,13 @@ def main(argv: list[str] | None = None) -> int:
                     fps = (len(recent_at) - 1) / (recent_at[-1] - recent_at[0]) if len(recent_at) > 2 else None
                     ms = sorted(infer_ms[-10:])[len(infer_ms[-10:]) // 2]
                     image = overlays[cam].render(shown, result, processors[cam], fps, ms)
-                    if draw(image, cam):
+                    if args.ghep:
+                        tiles[cam] = image
+                    elif draw(image, cam):
                         stop = True
+            if args.show and args.ghep and tiles:
+                if draw(mosaic([tiles[c] for c in cams if c in tiles]), "safety-ai"):
+                    stop = True
             if stop or (args.max_frames and rounds >= args.max_frames):
                 break
     except KeyboardInterrupt:
