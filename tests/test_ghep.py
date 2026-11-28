@@ -14,3 +14,10 @@ def test_ghep_4_camera_thanh_luoi_2x2():
 def test_ghep_3_camera_o_cuoi_de_den():
     out = mosaic([np.full((100, 100, 3), 255, np.uint8)] * 3, cell=(50, 50))
     assert out.shape == (100, 100, 3) and out[99, 99, 0] == 0
+
+
+def test_cua_so_vua_man_hinh_giu_ti_le():
+    from safety.cli import fit
+
+    assert fit((1920, 1080), (1536, 864)) == (1382, 777)      # laptop để tỉ lệ 125%
+    assert fit((1280, 720), (2560, 1440)) == (1280, 720)      # màn hình lớn: không phóng to

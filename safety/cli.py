@@ -103,10 +103,39 @@ def db_path(arg: str | None) -> str | None:
     return os.environ.get("INCIDENT_DB", "").strip() or DEFAULT_DB
 
 
+_WINDOWS: set[str] = set()
+
+
+def screen_size() -> tuple[int, int]:
+    """Kích thước màn hình theo pixel Windows thấy (đã tính tỉ lệ phóng to 125%...); máy khác: 1280x720."""
+    try:
+        import ctypes
+
+        u = ctypes.windll.user32
+        return int(u.GetSystemMetrics(0)), int(u.GetSystemMetrics(1))
+    except Exception:  # noqa: BLE001 - không phải Windows
+        return 1280, 720
+
+
+def fit(size: tuple[int, int], screen: tuple[int, int], margin: float = 0.9) -> tuple[int, int]:
+    """Cỡ cửa sổ giữ đúng tỉ lệ ảnh, không vượt `margin` màn hình (không phóng to ảnh nhỏ)."""
+    w, h = size
+    k = min(1.0, margin * screen[0] / w, margin * screen[1] / h)
+    return max(1, int(w * k)), max(1, int(h * k))
+
+
 def draw(image, title: str = "safety-ai"):
-    """Hiện một khung đã vẽ sẵn (safety.hien_thi.Overlay). Trả về True khi người xem bấm Q."""
+    """Hiện một khung đã vẽ sẵn (safety.hien_thi.Overlay). Trả về True khi người xem bấm Q.
+
+    Cửa sổ kéo giãn được và giữ tỉ lệ; lần đầu tự thu cho vừa màn hình (ảnh ghép 4 camera
+    1920x1080 trên laptop để tỉ lệ 125% bị tràn, mất nửa dưới — 28/11).
+    """
     import cv2
 
+    if title not in _WINDOWS:
+        cv2.namedWindow(title, cv2.WINDOW_NORMAL | cv2.WINDOW_KEEPRATIO)
+        cv2.resizeWindow(title, *fit((image.shape[1], image.shape[0]), screen_size()))
+        _WINDOWS.add(title)
     cv2.imshow(title, image)
     return cv2.waitKey(1) & 0xFF == ord("q")
 

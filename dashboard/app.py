@@ -69,7 +69,9 @@ if not ton_tai(DB):
         ".venv\\Scripts\\streamlit.exe run dashboard/app.py -- --db data/incidents_demo.db\n"
         "```"
     )
-    st.stop()
+    st.caption("Trang tự kiểm tra lại sau 5 giây.")
+    time.sleep(5)
+    st.rerun()
 
 # --- Bộ lọc ---------------------------------------------------------------
 gt = gia_tri_loc(DB)
@@ -96,6 +98,10 @@ with st.sidebar:
     an_bao_nham = st.checkbox("Ẩn sự cố đã đánh dấu báo nhầm", value=False)
     gioi_han = st.slider("Số dòng tối đa", 20, 500, 100, step=20)
     st.caption(f"Nguồn: `{DB.name}`")
+    tu_lam_moi = st.toggle("Tự làm mới", value=True,
+                           help="Cập nhật số liệu và danh sách sự cố định kỳ, không cần tải lại trang. "
+                                "Tắt khi đang đọc kỹ một sự cố để danh sách không nhảy.")
+    chu_ky = st.select_slider("Mỗi (giây)", options=[5, 10, 15, 30, 60], value=10, disabled=not tu_lam_moi)
     if st.button("Tải lại"):
         st.rerun()
 
@@ -107,85 +113,93 @@ loc = Filter(
     an_bao_nham=an_bao_nham,
 )
 
-# --- Số liệu tổng quan ----------------------------------------------------
-tq = tong_quan(DB, loc)
-c1, c2, c3, c4 = st.columns(4)
-c1.metric("Tổng sự cố", tq["tong"])
-c2.metric("Nghiêm trọng", tq["nghiem_trong"])
-c3.metric("Báo nhầm", tq["bao_nham"], f"{tq['ti_le_bao_nham']:.0%}")
-if tq["moi_nhat"]:
-    gio, ngay = gio_dia_phuong(tq["moi_nhat"]).split()
-    c4.metric("Sự cố gần nhất", f"{ngay[:5]} {gio[:5]}")
-else:
-    c4.metric("Sự cố gần nhất", "—")
+@st.fragment(run_every=chu_ky if tu_lam_moi else None)
+def noi_dung():
+    """Số liệu, biểu đồ, danh sách: chạy lại riêng phần này mỗi `chu_ky` giây khi bật tự làm mới."""
+    # --- Số liệu tổng quan ----------------------------------------------------
+    tq = tong_quan(DB, loc)
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Tổng sự cố", tq["tong"])
+    c2.metric("Nghiêm trọng", tq["nghiem_trong"])
+    c3.metric("Báo nhầm", tq["bao_nham"], f"{tq['ti_le_bao_nham']:.0%}")
+    if tq["moi_nhat"]:
+        gio, ngay = gio_dia_phuong(tq["moi_nhat"]).split()
+        c4.metric("Sự cố gần nhất", f"{ngay[:5]} {gio[:5]}")
+    else:
+        c4.metric("Sự cố gần nhất", "—")
 
-if tq["tong"] == 0:
-    st.info("Không có sự cố nào khớp bộ lọc.")
-    st.stop()
+    if tq["tong"] == 0:
+        st.info("Không có sự cố nào khớp bộ lọc.")
+        return
 
-# --- Biểu đồ --------------------------------------------------------------
-t1, t2 = st.columns([2, 1])
-with t1:
-    st.subheader("Theo ngày")
-    theo_ngay = dem_theo_ngay(DB, loc)
-    st.bar_chart(pd.Series(theo_ngay, name="Số sự cố"), color="#d62728")
-with t2:
-    st.subheader("Theo loại")
-    theo_loai = dem_theo(DB, "label", loc)
-    st.bar_chart(
-        pd.Series({LABEL_VI.get(k, k): v for k, v in theo_loai.items()}, name="Số sự cố"),
-        horizontal=True,
-        color="#ff7f0e",
-    )
+    # --- Biểu đồ --------------------------------------------------------------
+    t1, t2 = st.columns([2, 1])
+    with t1:
+        st.subheader("Theo ngày")
+        theo_ngay = dem_theo_ngay(DB, loc)
+        st.bar_chart(pd.Series(theo_ngay, name="Số sự cố"), color="#d62728")
+    with t2:
+        st.subheader("Theo loại")
+        theo_loai = dem_theo(DB, "label", loc)
+        st.bar_chart(
+            pd.Series({LABEL_VI.get(k, k): v for k, v in theo_loai.items()}, name="Số sự cố"),
+            horizontal=True,
+            color="#ff7f0e",
+        )
 
-st.subheader("Theo camera")
-st.bar_chart(pd.Series(dem_theo(DB, "camera", loc), name="Số sự cố"), horizontal=True)
+    st.subheader("Theo camera")
+    st.bar_chart(pd.Series(dem_theo(DB, "camera", loc), name="Số sự cố"), horizontal=True)
 
-# --- Danh sách sự cố ------------------------------------------------------
-st.subheader("Danh sách sự cố")
-rows = danh_sach(DB, loc, gioi_han=gioi_han)
+    # --- Danh sách sự cố ------------------------------------------------------
+    st.subheader("Danh sách sự cố")
+    rows = danh_sach(DB, loc, gioi_han=gioi_han)
 
-for r in rows:
-    nhan = LABEL_VI.get(r["label"], r["label"])
-    muc = SEVERITY_VI.get(r["severity"], r["severity"])
-    dau = "⚠️" if r["false_alarm"] else {"critical": "🔴", "high": "🟠"}.get(r["severity"], "🟡")
-    tieu_de = f"{dau} {gio_dia_phuong(r['ts'])} · {nhan} · {r['camera']}"
-    if r["false_alarm"]:
-        tieu_de += " · ĐÃ ĐÁNH DẤU BÁO NHẦM"
+    for r in rows:
+        nhan = LABEL_VI.get(r["label"], r["label"])
+        muc = SEVERITY_VI.get(r["severity"], r["severity"])
+        dau = "⚠️" if r["false_alarm"] else {"critical": "🔴", "high": "🟠"}.get(r["severity"], "🟡")
+        tieu_de = f"{dau} {gio_dia_phuong(r['ts'])} · {nhan} · {r['camera']}"
+        if r["false_alarm"]:
+            tieu_de += " · ĐÃ ĐÁNH DẤU BÁO NHẦM"
 
-    with st.expander(tieu_de):
-        trai, phai = st.columns([1, 2])
-        with trai:
-            anh = Path(r["snapshot"]) if r["snapshot"] else None
-            if anh and not anh.is_absolute():
-                anh = GOC / anh
-            if anh and anh.is_file():
-                # width="stretch" thay cho use_container_width (Streamlit sẽ bỏ tham số cũ)
-                st.image(str(anh), width="stretch")
-            else:
-                st.caption("Không có ảnh")
-        with phai:
-            st.write(f"**Mức độ:** {muc}  ·  **Độ tin cậy:** {r['score']:.2f}")
-            if r["sub_label"]:
-                st.write(f"**Chi tiết:** {r['sub_label']}")
-            if r["track_id"] is not None:
-                st.write(f"**Mã bám vết:** {r['track_id']}")
+        with st.expander(tieu_de):
+            trai, phai = st.columns([1, 2])
+            with trai:
+                anh = Path(r["snapshot"]) if r["snapshot"] else None
+                if anh and not anh.is_absolute():
+                    anh = GOC / anh
+                if anh and anh.is_file():
+                    # width="stretch" thay cho use_container_width (Streamlit sẽ bỏ tham số cũ)
+                    st.image(str(anh), width="stretch")
+                else:
+                    st.caption("Không có ảnh")
+            with phai:
+                st.write(f"**Mức độ:** {muc}  ·  **Độ tin cậy:** {r['score']:.2f}")
+                if r["sub_label"]:
+                    st.write(f"**Chi tiết:** {r['sub_label']}")
+                if r["track_id"] is not None:
+                    st.write(f"**Mã bám vết:** {r['track_id']}")
 
-            url = link_frigate(FRIGATE_UI, r["frigate_event_id"])
-            if url:
-                st.link_button("Xem trong Frigate", url)
-            elif r["frigate_event_id"]:
-                st.caption(f"Mã sự cố Frigate: `{r['frigate_event_id']}` (đặt FRIGATE_UI trong .env để có link)")
+                url = link_frigate(FRIGATE_UI, r["frigate_event_id"])
+                if url:
+                    st.link_button("Xem trong Frigate", url)
+                elif r["frigate_event_id"]:
+                    st.caption(f"Mã sự cố Frigate: `{r['frigate_event_id']}` (đặt FRIGATE_UI trong .env để có link)")
 
-            # Nút báo nhầm: đánh dấu được và bỏ đánh dấu được, vì bấm nhầm là chuyện thường.
-            if r["false_alarm"]:
-                if st.button("Bỏ đánh dấu báo nhầm", key=f"bo_{r['id']}"):
-                    danh_dau_bao_nham(DB, r["id"], False)
-                    st.rerun()
-            else:
-                if st.button("Báo nhầm", key=f"nham_{r['id']}", type="primary"):
-                    danh_dau_bao_nham(DB, r["id"], True)
-                    st.rerun()
+                # Nút báo nhầm: đánh dấu được và bỏ đánh dấu được, vì bấm nhầm là chuyện thường.
+                if r["false_alarm"]:
+                    if st.button("Bỏ đánh dấu báo nhầm", key=f"bo_{r['id']}"):
+                        danh_dau_bao_nham(DB, r["id"], False)
+                        st.rerun()
+                else:
+                    if st.button("Báo nhầm", key=f"nham_{r['id']}", type="primary"):
+                        danh_dau_bao_nham(DB, r["id"], True)
+                        st.rerun()
 
-if len(rows) == gioi_han:
-    st.caption(f"Đang hiển thị {gioi_han} sự cố mới nhất — tăng giới hạn ở thanh bên nếu cần.")
+    if len(rows) == gioi_han:
+        st.caption(f"Đang hiển thị {gioi_han} sự cố mới nhất — tăng giới hạn ở thanh bên nếu cần.")
+    if tu_lam_moi:
+        st.caption(f"Tự làm mới mỗi {chu_ky} giây · cập nhật lúc {datetime.now():%H:%M:%S}")
+
+
+noi_dung()
